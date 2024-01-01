@@ -18,11 +18,11 @@ fn print_parse_error(src: &str, span: std::ops::Range<usize>, msg: String) {
 fn main() -> Result<()> {
     let src = "
         func foo(x) {
-          x+x;
+          x+x
         }
         func main(_) {
           foo(1);
-          0;
+          0
         }
         ";
     let ast = match parser().parse(src) {

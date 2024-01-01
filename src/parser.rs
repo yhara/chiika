@@ -37,12 +37,12 @@ pub fn expr_parser() -> impl Parser<char, ast::Expr, Error = Simple<char>> {
     })
 }
 
-pub fn stmt_parser() -> impl Parser<char, ast::Expr, Error = Simple<char>> {
-    expr_parser().then_ignore(just(';').padded())
-}
+//pub fn stmt_parser() -> impl Parser<char, ast::Expr, Error = Simple<char>> {
+//    expr_parser().then_ignore(just(';').padded())
+//}
 
 pub fn stmts_parser() -> impl Parser<char, Vec<ast::Expr>, Error = Simple<char>> {
-    stmt_parser().padded().repeated()
+    expr_parser().padded().separated_by(just(';'))
 }
 
 pub fn func_parser() -> impl Parser<char, ast::Function, Error = Simple<char>> {
