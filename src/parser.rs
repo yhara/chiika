@@ -37,10 +37,6 @@ pub fn expr_parser() -> impl Parser<char, ast::Expr, Error = Simple<char>> {
     })
 }
 
-//pub fn stmt_parser() -> impl Parser<char, ast::Expr, Error = Simple<char>> {
-//    expr_parser().then_ignore(just(';').padded())
-//}
-
 pub fn stmts_parser() -> impl Parser<char, Vec<ast::Expr>, Error = Simple<char>> {
     expr_parser().padded().separated_by(just(';'))
 }

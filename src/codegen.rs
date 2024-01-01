@@ -14,7 +14,9 @@ pub fn run(ast: Vec<ast::Function>) -> Result<()> {
     let module = context.create_module("main");
     let builder = context.create_builder();
     let code_gen = CodeGen::new(ast, &context, &module, &builder);
+    code_gen.gen_declares();
     code_gen.gen_program()?;
+    code_gen.module.write_bitcode_to_path(std::path::Path::new("a.bc"));
     code_gen
         .module
         .print_to_file("a.ll")
@@ -35,6 +37,14 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
             module,
             builder,
         }
+    }
+
+    fn gen_declares(&self) {
+        let func_type = self
+            .context
+            .i64_type()
+            .fn_type(&[self.context.i64_type().into()], false);
+        self.module.add_function("print", func_type, None);
     }
 
     fn gen_program(&self) -> Result<()> {
