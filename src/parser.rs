@@ -32,8 +32,8 @@ pub fn parse_expr() -> impl Parser<char, Expr, Error = Simple<char>> {
 
         let atomic = 
             lambda
-            .or(ident)
             .or(funcall)
+            .or(ident)
             .or(parenthesized)
             .or(number);
 
