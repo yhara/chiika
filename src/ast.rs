@@ -9,11 +9,12 @@ pub enum Expr {
     Number(i64),
     Ident(String),
     OpCall(BinOp, Box<Expr>, Box<Expr>),
-    Lambda(String, Box<Expr>),
-    FunCall(Box<Expr>, Box<Expr>),
+    FunCall(String, Box<Expr>),
 }
 
 #[derive(PartialEq, Debug)]
-pub enum Stmt {
-    Declaration(String, Expr),
+pub struct Function {
+    pub name: String,
+    pub arg_name: String,
+    pub body_stmts: Vec<Expr>,
 }

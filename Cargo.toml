@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 chumsky = "0.9.3"
 ariadne = "0.3.0"
+inkwell = { git = "https://github.com/TheDan64/inkwell", features = ["llvm16-0"], rev = "4030f76" }

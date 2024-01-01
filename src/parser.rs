@@ -1,63 +1,66 @@
 use chumsky::prelude::*;
-use crate::ast::*;
+use crate::ast;
 
-pub fn parse_expr() -> impl Parser<char, Expr, Error = Simple<char>> {
+pub fn expr_parser() -> impl Parser<char, ast::Expr, Error = Simple<char>> {
     recursive(|expr| {
         let number = just('-')
             .or_not()
             .chain::<char, _, _>(text::int(10))
             .collect::<String>()
             .from_str().unwrapped()
-            .map(Expr::Number);
-        let ident = text::ident().map(|ident: String| Expr::Ident(ident));
+            .map(ast::Expr::Number);
+        let ident = text::ident().map(|ident: String| ast::Expr::Ident(ident));
 
-        let lambda = just("fn")
-            .ignore_then(just('('))
-            .ignore_then(text::ident())
-            .padded()
-            .then_ignore(just("){"))
-            .then(expr.clone().padded())
-            .then_ignore(just('}'))
-            .map(|(name, body)| Expr::Lambda(name, Box::new(body)));
-
-        let funcall = ident.clone()
+        let funcall = text::ident()
             .then_ignore(just('('))
             .then(expr.clone().padded())
             .then_ignore(just(')'))
-            .map(|(func, arg)| Expr::FunCall(Box::new(func), Box::new(arg)));
+            .map(|(func_name, arg)| ast::Expr::FunCall(func_name, Box::new(arg)));
 
         let parenthesized = just('(')
             .ignore_then(expr.clone())
             .then_ignore(just(')'));
 
         let atomic = 
-            lambda
-            .or(funcall)
+            funcall
             .or(ident)
             .or(parenthesized)
             .or(number);
 
         let bin_op = one_of("+-").map(|c| match c {
-            '+' => BinOp::Add,
-            '-' => BinOp::Sub,
+            '+' => ast::BinOp::Add,
+            '-' => ast::BinOp::Sub,
             _ => unreachable!()
         });
 
         let sum = atomic.clone()
             .then(bin_op.padded().then(atomic.clone()).repeated())
-            .foldl(|lhs, (op, rhs)| Expr::OpCall(op, Box::new(lhs), Box::new(rhs)));
+            .foldl(|lhs, (op, rhs)| ast::Expr::OpCall(op, Box::new(lhs), Box::new(rhs)));
 
         sum.or(atomic)
     })
 }
 
-pub fn parser() -> impl Parser<char, Vec<Stmt>, Error = Simple<char>> {
-    let decl = just("let")
-        .ignore_then(text::ident().padded())
-        .then_ignore(just('=').padded())
-        .then(parse_expr().padded())
-        .then_ignore(just(';').padded())
-        .map(|(name, body)| Stmt::Declaration(name.to_string(), body));
+pub fn stmt_parser() -> impl Parser<char, ast::Expr, Error = Simple<char>> {
+    expr_parser().then_ignore(just(';').padded())
+}
 
-    decl.padded().repeated().then_ignore(end())
+pub fn stmts_parser() -> impl Parser<char, Vec<ast::Expr>, Error = Simple<char>> {
+    stmt_parser().padded().repeated()
+}
+
+pub fn func_parser() -> impl Parser<char, ast::Function, Error = Simple<char>> {
+    just("func")
+        .ignore_then(text::ident().padded())
+        .then_ignore(just('(').padded())
+        .then(text::ident().padded())
+        .then_ignore(just(')').padded())
+        .then_ignore(just('{').padded())
+        .then(stmts_parser())
+        .then_ignore(just('}').padded())
+        .map(|((name, arg_name), body_stmts)| ast::Function{ name, arg_name, body_stmts } )
+}
+
+pub fn parser() -> impl Parser<char, Vec<ast::Function>, Error = Simple<char>> {
+    func_parser().padded().repeated().then_ignore(end())
 }

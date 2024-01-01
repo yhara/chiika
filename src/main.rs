@@ -4,7 +4,7 @@ use chumsky::Parser;
 use ariadne::{Label, Report, ReportKind, Source};
 use parser::parser;
 
-fn print_error(src: &str, span: std::ops::Range<usize>, msg: String) {
+fn print_parse_error(src: &str, span: std::ops::Range<usize>, msg: String) {
     Report::build(ReportKind::Error, "", span.start)
         .with_message(msg.clone())
         .with_label(
@@ -17,17 +17,21 @@ fn print_error(src: &str, span: std::ops::Range<usize>, msg: String) {
 
 fn main() {
     let src = "
-        let a = 1;
-        let b = 2;
-        let f = fn(x){ x };
-        let _ = f(a);
-        ";
-    match parser().parse(src) {
-        Ok(ast) => {
-            dbg!(&ast);
+        func foo(x) {
+          print(x+x);
         }
-        Err(errs) => errs.into_iter().for_each(|e| {
-            print_error(src, e.span(), e.to_string())
-        })
+        func main(_) {
+          foo(1);
+        }
+        ";
+    let ast = match parser().parse(src) {
+        Ok(x) => x,
+        Err(errs) => {
+            errs.into_iter().for_each(|e| {
+                print_parse_error(src, e.span(), e.to_string());
+            });
+            return;
+        }
     };
+    dbg!(&ast);
 }
