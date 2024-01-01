@@ -11,6 +11,7 @@ pub enum Ast {
     Number(i64),
     Ident(String),
     OpCall(BinOp, Box<Ast>, Box<Ast>),
+    Lambda(String, Box<Ast>),
 }
 
 pub fn parser() -> impl Parser<char, Ast, Error = Simple<char>> {
@@ -34,5 +35,17 @@ pub fn parser() -> impl Parser<char, Ast, Error = Simple<char>> {
         .then(bin_op.padded().then(atomic).repeated())
         .foldl(|lhs, (op, rhs)| Ast::OpCall(op, Box::new(lhs), Box::new(rhs)));
 
-    sum.then_ignore(end())
+    let expr = sum;
+
+    let func = just("fn")
+        .ignore_then(just('('))
+        .ignore_then(text::ident())
+        .padded()
+        .then_ignore(just("){"))
+        .then(expr.padded())
+        .then_ignore(just('}'))
+        .map(|(name, body)| Ast::Lambda(name, Box::new(body)));
+
+    //sum.then_ignore(end())
+    func
 }

@@ -3,7 +3,7 @@ use chumsky::Parser;
 use parser::parser;
 
 fn main() {
-    let src = "1 + hello + world";
+    let src = "fn(x){ x }";
     match parser().parse(src) {
         Ok(ast) => {
             dbg!(&ast);
