@@ -24,4 +24,6 @@ file "#{NAME}.out" => ["#{NAME}.bc", RUNTIME_A] do
     RUNTIME_A
 end
 
-task :a => "#{NAME}.out"
+task :a => "#{NAME}.out" do
+  sh "./a.out"
+end

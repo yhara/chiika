@@ -20,8 +20,12 @@ fn main() -> Result<()> {
         func foo(x) {
           print(x+x)
         }
-        func main(_) {
+        func chiika_main(_) {
           foo(1);
+          0
+        }
+        func main(_) {
+          chiika_start_tokio(0);
           0
         }
         ";

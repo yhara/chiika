@@ -44,6 +44,7 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
             .context
             .i64_type()
             .fn_type(&[self.context.i64_type().into()], false);
+        self.module.add_function("chiika_start_tokio", func_type, None);
         self.module.add_function("print", func_type, None);
     }
 
