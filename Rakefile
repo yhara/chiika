@@ -14,7 +14,7 @@ file "#{NAME}.bc" => [*SRC] do
   sh "cargo run"
 end
 
-file "#{NAME}.out" => ["#{NAME}.bc", RUNTIME_A] do
+file "#{NAME}.out" => [RUNTIME_A, "#{NAME}.bc"] do
   sh "clang",
     "-lm",
     "-ldl",

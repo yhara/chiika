@@ -1,6 +1,5 @@
 use crate::ast;
-use anyhow::{anyhow, Result, Context};
-use inkwell::values::AnyValue;
+use anyhow::{anyhow, Context, Result};
 
 pub struct CodeGen<'run, 'ictx: 'run> {
     ast: Vec<ast::Function>,
@@ -16,7 +15,9 @@ pub fn run(ast: Vec<ast::Function>) -> Result<()> {
     let code_gen = CodeGen::new(ast, &context, &module, &builder);
     code_gen.gen_declares();
     code_gen.gen_program()?;
-    code_gen.module.write_bitcode_to_path(std::path::Path::new("a.bc"));
+    code_gen
+        .module
+        .write_bitcode_to_path(std::path::Path::new("a.bc"));
     code_gen
         .module
         .print_to_file("a.ll")
@@ -42,9 +43,10 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
     fn gen_declares(&self) {
         let func_type = self
             .context
-            .i64_type()
+            .void_type()
             .fn_type(&[self.context.i64_type().into()], false);
-        self.module.add_function("chiika_start_tokio", func_type, None);
+        self.module
+            .add_function("chiika_start_tokio", func_type, None);
         self.module.add_function("print", func_type, None);
     }
 
@@ -61,9 +63,7 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
             .i64_type()
             .fn_type(&[self.context.i64_type().into()], false);
         let f = self.module.add_function(&func.name, func_type, None);
-        let block = self
-            .context
-            .append_basic_block(f, "start");
+        let block = self.context.append_basic_block(f, "start");
         //self.builder.build_unconditional_branch(block);
         self.builder.position_at_end(block);
         self.gen_stmts(func, &func.body_stmts)?;
@@ -103,16 +103,13 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
                 }
             }
             ast::Expr::FunCall(fname, arg_expr) => {
-                let f = self.module.get_function(fname).
-                    context(format!("unknown function '{}'", fname))?;
+                let f = self
+                    .module
+                    .get_function(fname)
+                    .context(format!("unknown function '{}'", fname))?;
                 let args = vec![self.gen_expr(func, arg_expr)?.into()];
-                let value = self.builder.build_direct_call(f, &args, "result");
-                // We assume it returns a i64
-                value
-                    .try_as_basic_value()
-                    .unwrap_left()
-                    .as_any_value_enum()
-                    .into_int_value()
+                self.builder.build_direct_call(f, &args, "result");
+                self.context.i64_type().const_int(0, false)
             }
         };
         Ok(v)
