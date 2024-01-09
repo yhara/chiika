@@ -1,39 +1,80 @@
 use crate::ast;
 use chumsky::prelude::*;
 
+pub fn ty_parser() -> impl Parser<char, ast::Ty, Error = Simple<char>> {
+    recursive(|ty| {
+        let params = ty
+            .clone()
+            .padded()
+            .separated_by(just(','))
+            .delimited_by(just('('), just(')'));
+        let sig = params
+            .then_ignore(just("->").padded())
+            .then(ty.clone())
+            .delimited_by(just('('), just(')'));
+        let fn_ty = just("$FN")
+            .ignore_then(sig)
+            .map(|(param_tys, ret_ty)| ast::Ty::fun(param_tys, ret_ty));
+
+        let raw_ty = ident_parser().map(|name| ast::Ty::Raw(name));
+
+        fn_ty.or(raw_ty)
+    })
+}
+
+pub fn append_dollar((dollar, body): (Option<char>, String)) -> String {
+    format!("{}{}", if dollar.is_some() { "$" } else { "" }, body)
+}
+
+pub fn ident_parser() -> impl Parser<char, String, Error = Simple<char>> {
+    just('$').or_not().then(text::ident()).map(append_dollar)
+}
+
+pub fn varref_parser() -> impl Parser<char, ast::Expr, Error = Simple<char>> {
+    ident_parser().map(ast::Expr::VarRef)
+}
+
+pub fn create_funcall((func_expr, args): (ast::Expr, Vec<ast::Expr>)) -> ast::Expr {
+    ast::Expr::FunCall(Box::new(func_expr), args)
+}
+
+pub fn atomic_parser(
+    expr_parser: impl Parser<char, ast::Expr, Error = Simple<char>> + Clone,
+) -> impl Parser<char, ast::Expr, Error = Simple<char>> {
+    let number = just('-')
+        .or_not()
+        .chain::<char, _, _>(text::int(10))
+        .collect::<String>()
+        .from_str()
+        .unwrapped()
+        .map(ast::Expr::Number);
+
+    let parenthesized = just('(')
+        .ignore_then(expr_parser.clone())
+        .then_ignore(just(')'));
+
+    let funcall = (varref_parser().or(parenthesized.clone()))
+        .then_ignore(just('('))
+        .then(expr_parser.clone().padded().separated_by(just(',')))
+        .then_ignore(just(')'))
+        .map(create_funcall);
+
+    funcall.or(parenthesized).or(varref_parser()).or(number)
+}
+
 pub fn expr_parser() -> impl Parser<char, ast::Expr, Error = Simple<char>> {
     recursive(|expr| {
-        let number = just('-')
-            .or_not()
-            .chain::<char, _, _>(text::int(10))
-            .collect::<String>()
-            .from_str()
-            .unwrapped()
-            .map(ast::Expr::Number);
-        let ident = text::ident().map(|ident: String| ast::Expr::Ident(ident));
-
-        let funcall = text::ident()
-            .then_ignore(just('('))
-            .then(expr.clone().padded())
-            .then_ignore(just(')'))
-            .map(|(func_name, arg)| ast::Expr::FunCall(func_name, Box::new(arg)));
-
-        let parenthesized = just('(').ignore_then(expr.clone()).then_ignore(just(')'));
-
-        let atomic = funcall.or(ident).or(parenthesized).or(number);
-
         let bin_op = one_of("+-").map(|c| match c {
             '+' => ast::BinOp::Add,
             '-' => ast::BinOp::Sub,
             _ => unreachable!(),
         });
 
-        let sum = atomic
-            .clone()
-            .then(bin_op.padded().then(atomic.clone()).repeated())
+        let sum = atomic_parser(expr.clone())
+            .then(bin_op.padded().then(atomic_parser(expr.clone())).repeated())
             .foldl(|lhs, (op, rhs)| ast::Expr::OpCall(op, Box::new(lhs), Box::new(rhs)));
 
-        sum.or(atomic)
+        sum.or(atomic_parser(expr))
     })
 }
 
@@ -44,22 +85,52 @@ pub fn stmts_parser() -> impl Parser<char, Vec<ast::Expr>, Error = Simple<char>>
         .allow_trailing()
 }
 
+pub fn param_parser() -> impl Parser<char, ast::Param, Error = Simple<char>> {
+    ty_parser()
+        .padded()
+        .then(ident_parser())
+        .map(|(ty, name)| ast::Param { ty, name })
+}
+
+pub fn params_parser() -> impl Parser<char, Vec<ast::Param>, Error = Simple<char>> {
+    param_parser().padded().separated_by(just(','))
+}
+
 pub fn func_parser() -> impl Parser<char, ast::Function, Error = Simple<char>> {
     just("func")
-        .ignore_then(text::ident().padded())
-        .then_ignore(just('(').padded())
-        .then(text::ident().padded())
-        .then_ignore(just(')').padded())
-        .then_ignore(just('{').padded())
-        .then(stmts_parser())
-        .then_ignore(just('}').padded())
-        .map(|((name, arg_name), body_stmts)| ast::Function {
+        .ignore_then(ident_parser().padded())
+        .then(params_parser().delimited_by(just('('), just(')')))
+        .then_ignore(just("->").padded())
+        .then(ty_parser().padded())
+        .then(stmts_parser().delimited_by(just('{'), just('}')))
+        .map(|(((name, params), ret_ty), body_stmts)| ast::Function {
             name,
-            arg_name,
+            params,
+            ret_ty,
             body_stmts,
         })
 }
 
-pub fn parser() -> impl Parser<char, Vec<ast::Function>, Error = Simple<char>> {
-    func_parser().padded().repeated().then_ignore(end())
+pub fn extern_parser() -> impl Parser<char, ast::Extern, Error = Simple<char>> {
+    just("extern")
+        .ignore_then(ident_parser().padded())
+        .then(params_parser().delimited_by(just('('), just(')')))
+        .then_ignore(just("->").padded())
+        .then(ty_parser().padded())
+        .then_ignore(just(';').padded())
+        .map(|((name, params), ret_ty)| ast::Extern {
+            name,
+            params,
+            ret_ty,
+        })
+}
+
+pub fn decl_parser() -> impl Parser<char, ast::Declaration, Error = Simple<char>> {
+    func_parser()
+        .map(ast::Declaration::Function)
+        .or(extern_parser().map(ast::Declaration::Extern))
+}
+
+pub fn parser() -> impl Parser<char, Vec<ast::Declaration>, Error = Simple<char>> {
+    decl_parser().padded().repeated().then_ignore(end())
 }

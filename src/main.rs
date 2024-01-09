@@ -20,14 +20,17 @@ fn main() -> Result<()> {
         extern chiika_start_tokio() -> int;
         extern print(int n) -> int;
         extern sleep($ENV $env, int n) -> $FUTURE;
-        func foo($ENV $env, $CONT $cont) -> $FUTURE {
-          $env_push(env, cont);
+        extern chiika_env_push($ENV $env, int n) -> int;
+        extern chiika_env_pop($ENV $env, int n) -> any;
+
+        func foo($ENV $env, $FN((int) -> $CONT) $cont) -> $FUTURE {
+          chiika_env_push(env, cont);
           print(100);
           sleep($env, foo_1, 1)
         }
         func foo_1($ENV $env, int _) -> $FUTURE {
           print(200);
-          ($pop_env(env))(0)
+          (chiika_pop_env($env) as $CONT)($env, 0)
         }
         func chiika_main($ENV $env, $CONT $cont) -> $FUTURE {
           foo($env, $cont)
