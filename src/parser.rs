@@ -49,9 +49,7 @@ pub fn atomic_parser(
         .unwrapped()
         .map(ast::Expr::Number);
 
-    let parenthesized = just('(')
-        .ignore_then(expr_parser.clone())
-        .then_ignore(just(')'));
+    let parenthesized = expr_parser.clone().delimited_by(just('('), just(')'));
 
     let funcall = (varref_parser().or(parenthesized.clone()))
         .then_ignore(just('('))
@@ -74,7 +72,14 @@ pub fn expr_parser() -> impl Parser<char, ast::Expr, Error = Simple<char>> {
             .then(bin_op.padded().then(atomic_parser(expr.clone())).repeated())
             .foldl(|lhs, (op, rhs)| ast::Expr::OpCall(op, Box::new(lhs), Box::new(rhs)));
 
-        sum.or(atomic_parser(expr))
+        let in_cast = atomic_parser(expr.clone())
+            .then_ignore(just("as").padded())
+            .then(ty_parser().padded());
+        let cast = just("$CAST")
+            .ignore_then(in_cast.delimited_by(just('('), just(')')))
+            .map(|(expr, ty)| ast::Expr::Cast(Box::new(expr), ty));
+
+        cast.or(sum).or(atomic_parser(expr))
     })
 }
 

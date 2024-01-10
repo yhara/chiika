@@ -10,6 +10,7 @@ pub enum Expr {
     VarRef(String),
     OpCall(BinOp, Box<Expr>, Box<Expr>),
     FunCall(Box<Expr>, Vec<Expr>),
+    Cast(Box<Expr>, Ty),
 }
 
 #[derive(PartialEq, Debug, Clone)]
