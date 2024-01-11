@@ -25,6 +25,13 @@ file "#{NAME}.out" => [RUNTIME_A, "#{NAME}.bc"] do
     RUNTIME_A
 end
 
-task :a => "#{NAME}.out" do
+task :aout => "#{NAME}.out" do
   sh "./a.out"
 end
+
+task :a do
+  cd "chiika-2" do
+    sh "cargo run"
+  end
+end
+
