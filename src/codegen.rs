@@ -33,14 +33,14 @@ impl<'ictx> LlvmValue<'ictx> {
     fn expect_int(self) -> Result<inkwell::values::IntValue<'ictx>> {
         match self {
             LlvmValue::Int(x) => Ok(x),
-            _ => Err(anyhow!("expected int")),
+            _ => Err(anyhow!("expected int but got {:?}", self)),
         }
     }
 
     fn expect_func(self) -> Result<(inkwell::values::FunctionValue<'ictx>, ast::FunTy)> {
         match self {
             LlvmValue::Func(x, y) => Ok((x, y)),
-            _ => Err(anyhow!("expected func")),
+            _ => Err(anyhow!("expected func but got {:?}", self)),
         }
     }
 }
@@ -84,6 +84,15 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
         LlvmValue::Int(self.context.i64_type().const_int(n, false))
     }
 
+    fn llvm_fn_type(&self, ty: &ast::FunTy) -> inkwell::types::FunctionType<'ictx> {
+        let params = ty.param_tys
+            .iter()
+            .map(|x| self.llvm_type(x).into())
+            .collect::<Vec<_>>();
+        self.llvm_type(&ty.ret_ty)
+            .fn_type(&params, false)
+    }
+
     fn llvm_type(&self, ty: &ast::Ty) -> inkwell::types::BasicTypeEnum<'ictx> {
         match ty {
             ast::Ty::Raw(name) => match &name[..] {
@@ -93,13 +102,8 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
                 "$FUTURE" => self.context.i8_type().ptr_type(Default::default()).into(),
                 _ => panic!("unknown chiika-1 type `{:?}'", ty),
             },
-            ast::Ty::Fun(ast::FunTy { param_tys, ret_ty }) => {
-                let params = param_tys
-                    .iter()
-                    .map(|x| self.llvm_type(x).into())
-                    .collect::<Vec<_>>();
-                self.llvm_type(ret_ty)
-                    .fn_type(&params, false)
+            ast::Ty::Fun(x) => {
+                self.llvm_fn_type(x)
                     .ptr_type(Default::default())
                     .into()
             }
@@ -114,10 +118,9 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
         let cast = match ty {
             ast::Ty::Raw(name) => match &name[..] {
                 "int" => LlvmValue::Int(v.try_into().map_err(|_| anyhow!("not int"))?),
-                "$ENV" => {
-                    LlvmValue::Opaque(v.try_into().map_err(|_| anyhow!("not {:?}: {:?}", ty, v))?)
-                }
-                _ => panic!("unknown chiika-1 type `{:?}'", ty),
+                "$ENV" | "$FUTURE" =>
+                    LlvmValue::Opaque(v.try_into().map_err(|_| anyhow!("not {:?}: {:?}", ty, v))?),
+                _ => panic!("unknown chiika-1 type to cast: `{:?}', value: {:?}", ty, v),
             },
             ast::Ty::Fun(fun_ty) => LlvmValue::FuncPtr(
                 v.try_into().map_err(|_| anyhow!("not func"))?,
@@ -160,10 +163,7 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
     }
 
     fn create_func(&self, func: &ast::Function) {
-        let func_type = self
-            .context
-            .i64_type()
-            .fn_type(&[self.context.i64_type().into()], false);
+        let func_type = self.llvm_fn_type(&func.fun_ty());
         self.module.add_function(&func.name, func_type, None);
     }
 
@@ -180,7 +180,7 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
             let v = self.gen_expr(func, &stmts[i])?;
             if i == stmts.len() - 1 {
                 self.builder
-                    .build_return(Some(&v.expect_int()?.as_basic_value_enum()));
+                    .build_return(Some(&v.into_arg_value()));
             }
         }
         Ok(())
@@ -201,7 +201,8 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
                         .module
                         .get_function(s)
                         .context(format!("unknown variable or function '{}'", s))?;
-                    LlvmValue::Func(f, func.fun_ty())
+                    let fun_ty = self.ast.iter().find(|x| x.name == *s).expect(&format!("function {} not found", s)).fun_ty();
+                    LlvmValue::Func(f, fun_ty)
                 }
             }
             ast::Expr::OpCall(op, lhs, rhs) => {
@@ -226,6 +227,8 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
                     .build_direct_call(f, &args, "result")
                     .try_as_basic_value()
                     .unwrap_left();
+                dbg!(&func_expr);
+                dbg!(&f_ty);
                 self.cast(x.as_basic_value_enum(), &f_ty.ret_ty)?
             }
             ast::Expr::Cast(expr, ty) => {

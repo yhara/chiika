@@ -22,6 +22,7 @@ fn main() -> Result<()> {
         extern sleep($ENV $env, int n) -> $FUTURE;
         extern chiika_env_push($ENV $env, int n) -> int;
         extern chiika_env_pop($ENV $env, int n) -> any;
+        extern chiika_start_tokio(int n) -> int;
 
         func foo($ENV $env, $FN((int) -> $FUTURE) $cont) -> $FUTURE {
           chiika_env_push($env, $cont);
@@ -32,7 +33,7 @@ fn main() -> Result<()> {
           print(200);
           ($CAST(chiika_pop_env($env) as $FN(($ENV, int) -> $FUTURE)))($env, 0)
         }
-        func chiika_main($ENV $env, $CONT $cont) -> $FUTURE {
+        func chiika_main($ENV $env, $FN((int) -> $FUTURE) $cont) -> $FUTURE {
           foo($env, $cont)
         }
         func main() -> int {
