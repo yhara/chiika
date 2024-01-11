@@ -3,6 +3,7 @@ CARGO_TARGET = ENV["SHIIKA_CARGO_TARGET"] || "./target"
 SRC = Dir["src/**/*"]
 RUNTIME = Dir["chiika_runtime/**/*"]
 RUNTIME_A = File.expand_path "#{CARGO_TARGET}/debug/libchiika_runtime.a"
+CLANG = RUBY_PLATFORM =~ /linux/ ? "clang-16" : "clang"
 
 file RUNTIME_A => [*RUNTIME] do
   cd "chiika_runtime" do
@@ -15,7 +16,7 @@ file "#{NAME}.bc" => [*SRC] do
 end
 
 file "#{NAME}.out" => [RUNTIME_A, "#{NAME}.bc"] do
-  sh "clang",
+  sh CLANG,
     "-lm",
     "-ldl",
     "-lpthread",
