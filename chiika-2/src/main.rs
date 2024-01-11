@@ -1,10 +1,10 @@
 mod ast;
 mod compiler;
 mod parser;
-use ariadne::{Report, ReportKind, Label, Source};
-use parser::parser;
-use chumsky::Parser;
 use anyhow::{bail, Result};
+use ariadne::{Label, Report, ReportKind, Source};
+use chumsky::Parser;
+use parser::parser;
 
 fn print_parse_error(src: &str, span: std::ops::Range<usize>, msg: String) {
     Report::build(ReportKind::Error, "", span.start)

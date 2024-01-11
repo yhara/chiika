@@ -3,12 +3,37 @@ pub enum Declaration {
     Extern(Extern),
     Function(Function),
 }
+
+impl Declaration {
+    pub fn split(mut decls: Vec<Declaration>) -> (Vec<Extern>, Vec<Function>) {
+        let mut externs = vec![];
+        let mut funcs = vec![];
+        while let Some(decl) = decls.pop() {
+            match decl {
+                Declaration::Extern(x) => externs.push(x),
+                Declaration::Function(x) => funcs.push(x),
+            }
+        }
+        (externs, funcs)
+    }
+}
+
 #[derive(PartialEq, Debug, Clone)]
 pub struct Extern {
     pub is_async: bool,
     pub name: String,
     pub params: Vec<Param>,
     pub ret_ty: Ty,
+}
+
+impl Extern {
+    pub fn fun_ty(&self) -> FunTy {
+        FunTy {
+            is_async: self.is_async,
+            param_tys: self.params.iter().map(|x| x.ty.clone()).collect::<Vec<_>>(),
+            ret_ty: Box::new(self.ret_ty.clone()),
+        }
+    }
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -19,16 +44,49 @@ pub struct Function {
     pub body_stmts: Vec<Expr>,
 }
 
+impl Function {
+    pub fn fun_ty(&self) -> FunTy {
+        FunTy {
+            // PERF: This is safe but slow
+            is_async: true,
+            param_tys: self.params.iter().map(|x| x.ty.clone()).collect::<Vec<_>>(),
+            ret_ty: Box::new(self.ret_ty.clone()),
+        }
+    }
+}
+
 #[derive(PartialEq, Debug, Clone)]
 pub struct Param {
     pub ty: Ty,
     pub name: String,
 }
 
+impl Param {
+    pub fn new(ty: Ty, name: &str) -> Param {
+        Param {
+            ty,
+            name: name.to_string(),
+        }
+    }
+}
+
 #[derive(PartialEq, Debug, Clone)]
 pub enum Ty {
     Raw(String),
-    //Fun(FunTy),
+    Fun(FunTy),
+}
+
+impl Ty {
+    pub fn raw(name: &str) -> Ty {
+        Ty::Raw(name.to_string())
+    }
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub struct FunTy {
+    pub is_async: bool,
+    pub param_tys: Vec<Ty>,
+    pub ret_ty: Box<Ty>,
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -41,7 +99,10 @@ pub enum Expr {
 }
 
 pub fn to_source(ast: Vec<Declaration>) -> String {
-    ast.iter().map(|x| x.to_string()).collect::<Vec<_>>().join("")
+    ast.iter()
+        .map(|x| x.to_string())
+        .collect::<Vec<_>>()
+        .join("")
 }
 
 impl std::fmt::Display for Declaration {
@@ -55,21 +116,33 @@ impl std::fmt::Display for Declaration {
 
 impl std::fmt::Display for Extern {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let params = self.params.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ");
-        write!(f, "extern {}({}) -> {};\n", 
-               &self.name,
-               params,
-               &self.ret_ty)
+        let params = self
+            .params
+            .iter()
+            .map(|x| x.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        write!(
+            f,
+            "extern {}({}) -> {};\n",
+            &self.name, params, &self.ret_ty
+        )
     }
 }
 
 impl std::fmt::Display for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let params = self.params.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ");
-        write!(f, "func {}({}) -> {} {{\n", 
-               &self.name,
-               params,
-               &self.ret_ty)?;
+        let params = self
+            .params
+            .iter()
+            .map(|x| x.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        write!(
+            f,
+            "func {}({}) -> {} {{\n",
+            &self.name, params, &self.ret_ty
+        )?;
         for expr in &self.body_stmts {
             write!(f, "  {};\n", expr)?;
         }
@@ -86,7 +159,16 @@ impl std::fmt::Display for Param {
 impl std::fmt::Display for Ty {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Ty::Raw(s) => write!(f, "{}", s)
+            Ty::Raw(s) => write!(f, "{}", s),
+            Ty::Fun(x) => {
+                let params = x
+                    .param_tys
+                    .iter()
+                    .map(|x| x.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                write!(f, "$FN(({}) -> {})", params, x.ret_ty)
+            }
         }
     }
 }
@@ -97,8 +179,11 @@ impl std::fmt::Display for Expr {
             Expr::Number(n) => write!(f, "{}", n),
             Expr::VarRef(s) => write!(f, "{}", s),
             Expr::FunCall(fexpr, arg_exprs) => {
-                let args = arg_exprs.iter().map(|x| x.to_string())
-                    .collect::<Vec<_>>().join(", ");
+                let args = arg_exprs
+                    .iter()
+                    .map(|x| x.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 write!(f, "{}({})", fexpr, args)
             }
         }
