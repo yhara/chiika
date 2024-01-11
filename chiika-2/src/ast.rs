@@ -5,6 +5,7 @@ pub enum Declaration {
 }
 #[derive(PartialEq, Debug, Clone)]
 pub struct Extern {
+    pub is_async: bool,
     pub name: String,
     pub params: Vec<Param>,
     pub ret_ty: Ty,

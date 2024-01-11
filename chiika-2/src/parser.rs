@@ -100,13 +100,14 @@ fn func_parser() -> impl Parser<char, ast::Function, Error = Simple<char>> {
 }
 
 fn extern_parser() -> impl Parser<char, ast::Extern, Error = Simple<char>> {
-    just("extern")
-        .ignore_then(ident_parser().padded())
+    just("extern_async").or(just("extern"))
+        .then(ident_parser().padded())
         .then(params_parser().delimited_by(just('('), just(')')))
         .then_ignore(just("->").padded())
         .then(ty_parser().padded())
         .then_ignore(just(';').padded())
-        .map(|((name, params), ret_ty)| ast::Extern {
+        .map(|(((is_async, name), params), ret_ty)| ast::Extern {
+            is_async: is_async == "extern_async",
             name,
             params,
             ret_ty,

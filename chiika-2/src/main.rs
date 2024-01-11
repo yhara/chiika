@@ -18,7 +18,7 @@ fn print_parse_error(src: &str, span: std::ops::Range<usize>, msg: String) {
 fn main() -> Result<()> {
     let src = "
       extern print(int n) -> int;
-      extern sleep(int n) -> int;
+      extern_async sleep(int n) -> int;
       fun foo() -> int {
         print(100);
         print(sleep(1));
