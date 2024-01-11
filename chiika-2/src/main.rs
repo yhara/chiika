@@ -1,4 +1,5 @@
 mod ast;
+mod compiler;
 mod parser;
 use ariadne::{Report, ReportKind, Label, Source};
 use parser::parser;
@@ -38,5 +39,7 @@ fn main() -> Result<()> {
             bail!("");
         }
     };
+    let compiled = compiler::compile(ast);
+    println!("{}", ast::to_source(compiled));
     Ok(())
 }
