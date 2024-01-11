@@ -3,9 +3,11 @@ use anyhow::{anyhow, Context, Result};
 use inkwell::types::BasicType;
 //use inkwell::values::AnyValue;
 use inkwell::values::BasicValue;
+use std::collections::HashMap;
 
 pub struct CodeGen<'run, 'ictx: 'run> {
     ast: Vec<ast::Function>,
+    signatures: HashMap<String, ast::FunTy>,
     context: &'ictx inkwell::context::Context,
     module: &'run inkwell::module::Module<'ictx>,
     builder: &'run inkwell::builder::Builder<'ictx>,
@@ -36,22 +38,16 @@ impl<'ictx> LlvmValue<'ictx> {
             _ => Err(anyhow!("expected int but got {:?}", self)),
         }
     }
-
-    fn expect_func(self) -> Result<(inkwell::values::FunctionValue<'ictx>, ast::FunTy)> {
-        match self {
-            LlvmValue::Func(x, y) => Ok((x, y)),
-            _ => Err(anyhow!("expected func but got {:?}", self)),
-        }
-    }
 }
 
 pub fn run(ast: Vec<ast::Declaration>) -> Result<()> {
     let (externs, funcs) = ast::Declaration::split(ast);
+    let sigs = gather_sigs(&externs, &funcs);
 
     let context = inkwell::context::Context::create();
     let module = context.create_module("main");
     let builder = context.create_builder();
-    let code_gen = CodeGen::new(funcs, &context, &module, &builder);
+    let code_gen = CodeGen::new(funcs, sigs, &context, &module, &builder);
     code_gen.gen_declares(&externs);
     code_gen.gen_program()?;
     code_gen
@@ -65,15 +61,23 @@ pub fn run(ast: Vec<ast::Declaration>) -> Result<()> {
     Ok(())
 }
 
+fn gather_sigs(externs: &[ast::Extern], funcs: &[ast::Function]) -> HashMap<String, ast::FunTy> {
+    let tys = externs.iter().map(|x| (x.name.clone(), x.fun_ty()))
+        .chain(funcs.iter().map(|x| (x.name.clone(), x.fun_ty())));
+    tys.collect()
+}
+
 impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
     fn new(
         ast: Vec<ast::Function>,
+        signatures: HashMap<String, ast::FunTy>,
         context: &'ictx inkwell::context::Context,
         module: &'run inkwell::module::Module<'ictx>,
         builder: &'run inkwell::builder::Builder<'ictx>,
     ) -> CodeGen<'run, 'ictx> {
         CodeGen {
             ast,
+            signatures,
             context,
             module,
             builder,
@@ -118,7 +122,7 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
         let cast = match ty {
             ast::Ty::Raw(name) => match &name[..] {
                 "int" => LlvmValue::Int(v.try_into().map_err(|_| anyhow!("not int"))?),
-                "$ENV" | "$FUTURE" =>
+                "$ENV" | "$FUTURE" | "any" =>
                     LlvmValue::Opaque(v.try_into().map_err(|_| anyhow!("not {:?}: {:?}", ty, v))?),
                 _ => panic!("unknown chiika-1 type to cast: `{:?}', value: {:?}", ty, v),
             },
@@ -132,11 +136,10 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
 
     #[allow(unreachable_code)]
     fn recast(&self, v: LlvmValue<'ictx>, ty: &ast::Ty) -> Result<LlvmValue<'ictx>> {
-        let _cast = match (v, ty) {
-            //(LlvmValue::Int(_), ast::Ty::Raw("Int")) => v.clone(),
-            _ => return Err(anyhow!("todo")),
+        let LlvmValue::Opaque(ptr) = v else {
+            return Err(anyhow!("only Opaque can be recast but got {:?}", v));
         };
-        Ok(_cast)
+        self.cast(ptr.into(), ty)
     }
 
     fn gen_declares(&self, externs: &[ast::Extern]) {
@@ -201,8 +204,9 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
                         .module
                         .get_function(s)
                         .context(format!("unknown variable or function '{}'", s))?;
-                    let fun_ty = self.ast.iter().find(|x| x.name == *s).expect(&format!("function {} not found", s)).fun_ty();
-                    LlvmValue::Func(f, fun_ty)
+                    let fun_ty = self.signatures.get(s)
+                        .expect(&format!("function {} not found", s));
+                    LlvmValue::Func(f, fun_ty.clone())
                 }
             }
             ast::Expr::OpCall(op, lhs, rhs) => {
@@ -214,7 +218,6 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
                 })
             }
             ast::Expr::FunCall(func_expr, arg_exprs) => {
-                let (f, f_ty) = self.gen_expr(func, func_expr)?.expect_func()?;
                 let args = arg_exprs
                     .iter()
                     .map(|expr| self.gen_expr(func, expr))
@@ -222,14 +225,25 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
                     .into_iter()
                     .map(|arg| arg.into_arg_value().into())
                     .collect::<Vec<_>>();
-                let x = self
-                    .builder
-                    .build_direct_call(f, &args, "result")
-                    .try_as_basic_value()
-                    .unwrap_left();
-                dbg!(&func_expr);
-                dbg!(&f_ty);
-                self.cast(x.as_basic_value_enum(), &f_ty.ret_ty)?
+                let (x, fun_ty) = match self.gen_expr(func, func_expr)? {
+                    LlvmValue::Func(f, fun_ty) => {
+                        (self.builder
+                            .build_direct_call(f, &args, "result")
+                            .try_as_basic_value()
+                            .unwrap_left(),
+                            fun_ty)
+                    }
+                    LlvmValue::FuncPtr(fptr, fun_ty) => {
+                        let ftype = self.llvm_fn_type(&fun_ty);
+                        (self.builder
+                            .build_indirect_call(ftype, fptr, &args, "result")
+                            .try_as_basic_value()
+                            .unwrap_left(),
+                            fun_ty)
+                    }
+                    _ => return Err(anyhow!("not a function: {:?}", expr)) 
+                };
+                self.cast(x.as_basic_value_enum(), &fun_ty.ret_ty)?
             }
             ast::Expr::Cast(expr, ty) => {
                 let v = self.gen_expr(func, expr)?;

@@ -57,6 +57,15 @@ pub struct Extern {
     pub ret_ty: Ty,
 }
 
+impl Extern {
+    pub fn fun_ty(&self) -> FunTy {
+        FunTy {
+            param_tys: self.params.iter().map(|x| x.ty.clone()).collect::<Vec<_>>(),
+            ret_ty: Box::new(self.ret_ty.clone()),
+        }
+    }
+}
+
 #[derive(PartialEq, Debug, Clone)]
 pub struct Param {
     pub ty: Ty,
