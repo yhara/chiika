@@ -122,6 +122,10 @@ impl Compiler {
             ast::Expr::Number(_) => e,
             ast::Expr::VarRef(_) => e,
             ast::Expr::FunCall(fexpr, arg_exprs) => {
+                let new_args = arg_exprs
+                    .into_iter()
+                    .map(|x| self.compile_expr(x))
+                    .collect::<Result<Vec<_>>>()?;
                 let ast::Expr::VarRef(fname) = *fexpr else {
                     return Err(anyhow!("not a function: {:?}", fexpr));
                 };
@@ -129,19 +133,14 @@ impl Compiler {
                     return Err(anyhow!("unknown function: {:?}", fname));
                 };
                 if fun_ty.is_async {
-                    let cps_call = ast::Expr::FunCall(
-                        Box::new(ast::Expr::VarRef(fname)),
-                        vec![
-                            //todo
-                        ],
-                    );
+                    let cps_call = ast::Expr::FunCall(Box::new(ast::Expr::VarRef(fname)), new_args);
                     let last_chapter = self.chapters.back_mut().unwrap();
                     last_chapter.stmts.push(cps_call);
                     last_chapter.async_result_ty = (*fun_ty.ret_ty).clone();
                     self.chapters.push_back(Chapter::new());
                     ast::Expr::VarRef("$async_result".to_string())
                 } else {
-                    ast::Expr::FunCall(Box::new(ast::Expr::VarRef(fname)), arg_exprs)
+                    ast::Expr::FunCall(Box::new(ast::Expr::VarRef(fname)), new_args)
                 }
             }
         };
