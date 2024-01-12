@@ -39,7 +39,7 @@ fn main() -> Result<()> {
             bail!("");
         }
     };
-    let compiled = compiler::compile(ast);
+    let compiled = compiler::compile(ast)?;
     println!("{}", ast::to_source(compiled));
     Ok(())
 }
