@@ -4,20 +4,6 @@ pub enum Declaration {
     Function(Function),
 }
 
-impl Declaration {
-    pub fn split(mut decls: Vec<Declaration>) -> (Vec<Extern>, Vec<Function>) {
-        let mut externs = vec![];
-        let mut funcs = vec![];
-        while let Some(decl) = decls.pop() {
-            match decl {
-                Declaration::Extern(x) => externs.push(x),
-                Declaration::Function(x) => funcs.push(x),
-            }
-        }
-        (externs, funcs)
-    }
-}
-
 #[derive(PartialEq, Debug, Clone)]
 pub struct Extern {
     pub is_async: bool,
