@@ -52,10 +52,10 @@ pub fn run(ast: Vec<ast::Declaration>) -> Result<()> {
     code_gen.gen_program()?;
     code_gen
         .module
-        .write_bitcode_to_path(std::path::Path::new("a.bc"));
+        .write_bitcode_to_path(std::path::Path::new("../a.bc"));
     code_gen
         .module
-        .print_to_file("a.ll")
+        .print_to_file("../a.ll")
         .map_err(|llvm_str| anyhow!("{}", llvm_str.to_string()))?;
     log("Generated a.bc and a.ll");
     Ok(())

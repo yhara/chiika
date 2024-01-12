@@ -12,7 +12,9 @@ file RUNTIME_A => [*RUNTIME] do
 end
 
 file "#{NAME}.bc" => [*SRC] do
-  sh "cargo run"
+  cd "chiika-1" do
+    sh "cargo run"
+  end
 end
 
 file "#{NAME}.out" => [RUNTIME_A, "#{NAME}.bc"] do
