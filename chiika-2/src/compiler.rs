@@ -64,7 +64,7 @@ impl Compiler {
         self.chapters.clear();
         self.chapters.push_back(Chapter::new());
         for expr in f.body_stmts.drain(..).collect::<Vec<_>>() {
-            let new_expr = self.compile_expr(expr)?;
+            let new_expr = self.compile_expr(&f.name, expr)?;
             self.chapters.back_mut().unwrap().stmts.push(new_expr);
         }
 
@@ -121,30 +121,35 @@ impl Compiler {
         Ok(split_funcs)
     }
 
-    fn compile_expr(&mut self, e: ast::Expr) -> Result<ast::Expr> {
+    fn compile_expr(&mut self, fname: &str, e: ast::Expr) -> Result<ast::Expr> {
         let new_e = match e {
             ast::Expr::Number(_) => e,
             ast::Expr::VarRef(_) => e,
             ast::Expr::FunCall(fexpr, arg_exprs) => {
-                let new_args = arg_exprs
+                let mut new_args = arg_exprs
                     .into_iter()
-                    .map(|x| self.compile_expr(x))
+                    .map(|x| self.compile_expr(fname, x))
                     .collect::<Result<Vec<_>>>()?;
-                let ast::Expr::VarRef(fname) = *fexpr else {
+                let ast::Expr::VarRef(callee_name) = *fexpr else {
                     return Err(anyhow!("not a function: {:?}", fexpr));
                 };
-                let Some(fun_ty) = self.sigs.get(&fname) else {
-                    return Err(anyhow!("unknown function: {:?}", fname));
+                let Some(fun_ty) = self.sigs.get(&callee_name) else {
+                    return Err(anyhow!("unknown function: {:?}", callee_name));
                 };
                 if fun_ty.is_async {
-                    let cps_call = ast::Expr::FunCall(Box::new(ast::Expr::VarRef(fname)), new_args);
+                    new_args.insert(0, ast::Expr::var_ref("$env"));
+                    new_args.insert(1, ast::Expr::var_ref(chapter_func_name(fname, self.chapters.len())));
+                    let cps_call = ast::Expr::FunCall(Box::new(ast::Expr::VarRef(callee_name)), new_args);
+
+                    // Change chapter here
                     let last_chapter = self.chapters.back_mut().unwrap();
                     last_chapter.stmts.push(cps_call);
                     last_chapter.async_result_ty = (*fun_ty.ret_ty).clone();
                     self.chapters.push_back(Chapter::new());
+
                     ast::Expr::VarRef("$async_result".to_string())
                 } else {
-                    ast::Expr::FunCall(Box::new(ast::Expr::VarRef(fname)), new_args)
+                    ast::Expr::FunCall(Box::new(ast::Expr::VarRef(callee_name)), new_args)
                 }
             }
             ast::Expr::Cast(_, _) => panic!("chiika-2 does not have cast operation"),

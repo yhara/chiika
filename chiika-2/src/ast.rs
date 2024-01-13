@@ -91,8 +91,8 @@ pub fn to_source(ast: Vec<Declaration>) -> String {
 }
 
 impl Expr {
-    pub fn var_ref(name: &str) -> Expr {
-        Expr::VarRef(name.to_string())
+    pub fn var_ref(name: impl Into<String>) -> Expr {
+        Expr::VarRef(name.into())
     }
 }
 
