@@ -20,6 +20,10 @@ fn main() -> Result<()> {
         extern chiika_env_push($ENV $env, any obj) -> int;
         extern chiika_env_pop($ENV $env) -> any;
         extern chiika_start_tokio(int n) -> int;
+        func main() -> int {
+          chiika_start_tokio(0);
+          0
+        }
 
         extern print(int n) -> int;
         extern sleep_sec($ENV $env, $FN(($ENV, int) -> $FUTURE) $cont, int n) -> $FUTURE;
@@ -39,10 +43,6 @@ fn main() -> Result<()> {
         func chiika_main_1($ENV $env, int $async_result) -> $FUTURE {
           print($async_result);
           ($CAST(chiika_env_pop($env) as $FN(($ENV, int) -> $FUTURE)))($env, 0)
-        }
-        func main() -> int {
-          chiika_start_tokio(0);
-          0
         }
         ";
     let ast = match parser().parse(src) {
