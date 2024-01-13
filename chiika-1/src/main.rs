@@ -17,23 +17,28 @@ fn print_parse_error(src: &str, span: std::ops::Range<usize>, msg: String) {
 
 fn main() -> Result<()> {
     let src = "
-        extern print(int n) -> int;
-        extern sleep_sec($ENV $env, $FN(($ENV, int) -> $FUTURE) $cont, int n) -> $FUTURE;
         extern chiika_env_push($ENV $env, any obj) -> int;
         extern chiika_env_pop($ENV $env) -> any;
         extern chiika_start_tokio(int n) -> int;
 
+        extern print(int n) -> int;
+        extern sleep_sec($ENV $env, $FN(($ENV, int) -> $FUTURE) $cont, int n) -> $FUTURE;
         func foo($ENV $env, $FN((int) -> $FUTURE) $cont) -> $FUTURE {
           chiika_env_push($env, $cont);
           print(100);
           sleep_sec($env, foo_1, 1)
         }
-        func foo_1($ENV $env, int _) -> $FUTURE {
+        func foo_1($ENV $env, int $async_result) -> $FUTURE {
           print(200);
-          ($CAST(chiika_env_pop($env) as $FN(($ENV, int) -> $FUTURE)))($env, 0)
+          ($CAST(chiika_env_pop($env) as $FN(($ENV, int) -> $FUTURE)))($env, 300)
         }
         func chiika_main($ENV $env, $FN((int) -> $FUTURE) $cont) -> $FUTURE {
-          foo($env, $cont)
+          chiika_env_push($env, $cont);
+          foo($env, chiika_main_1)
+        }
+        func chiika_main_1($ENV $env, int $async_result) -> $FUTURE {
+          print($async_result);
+          ($CAST(chiika_env_pop($env) as $FN(($ENV, int) -> $FUTURE)))($env, 0)
         }
         func main() -> int {
           chiika_start_tokio(0);

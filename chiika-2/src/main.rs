@@ -40,6 +40,11 @@ fn main() -> Result<()> {
         }
     };
     let compiled = compiler::compile(ast)?;
+    println!("
+extern chiika_env_push($ENV $env, any obj) -> int;
+extern chiika_env_pop($ENV $env) -> any;
+extern chiika_start_tokio(int n) -> int;
+");
     println!("{}", ast::to_source(compiled));
     Ok(())
 }
