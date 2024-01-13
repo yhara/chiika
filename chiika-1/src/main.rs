@@ -18,7 +18,7 @@ fn print_parse_error(src: &str, span: std::ops::Range<usize>, msg: String) {
 fn main() -> Result<()> {
     let src = "
         extern print(int n) -> int;
-        extern sleep($ENV $env, $FN(($ENV, int) -> $FUTURE) $cont, int n) -> $FUTURE;
+        extern sleep_sec($ENV $env, $FN(($ENV, int) -> $FUTURE) $cont, int n) -> $FUTURE;
         extern chiika_env_push($ENV $env, any obj) -> int;
         extern chiika_env_pop($ENV $env) -> any;
         extern chiika_start_tokio(int n) -> int;
@@ -26,7 +26,7 @@ fn main() -> Result<()> {
         func foo($ENV $env, $FN((int) -> $FUTURE) $cont) -> $FUTURE {
           chiika_env_push($env, $cont);
           print(100);
-          sleep($env, foo_1, 1)
+          sleep_sec($env, foo_1, 1)
         }
         func foo_1($ENV $env, int _) -> $FUTURE {
           print(200);
