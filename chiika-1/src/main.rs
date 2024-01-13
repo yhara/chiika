@@ -33,6 +33,7 @@ fn main() -> Result<()> {
           sleep_sec($env, foo_1, 1)
         }
         func foo_1($ENV $env, int $async_result) -> $FUTURE {
+          print($async_result);
           print(200);
           ($CAST(chiika_env_pop($env) as $FN(($ENV, int) -> $FUTURE)))($env, 300)
         }
