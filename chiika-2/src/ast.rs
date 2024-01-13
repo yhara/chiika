@@ -31,10 +31,9 @@ pub struct Function {
 }
 
 impl Function {
-    pub fn fun_ty(&self) -> FunTy {
+    pub fn fun_ty(&self, is_async: bool) -> FunTy {
         FunTy {
-            // PERF: This is safe but slow
-            is_async: true,
+            is_async,
             param_tys: self.params.iter().map(|x| x.ty.clone()).collect::<Vec<_>>(),
             ret_ty: Box::new(self.ret_ty.clone()),
         }
@@ -178,8 +177,7 @@ impl std::fmt::Display for Expr {
                     .join(", ");
                 write!(f, "{}({})", fexpr, args)
             }
-            Expr::Cast(expr, ty) =>
-                write!(f, "($CAST({} as {}))", expr, ty)
+            Expr::Cast(expr, ty) => write!(f, "($CAST({} as {}))", expr, ty),
         }
     }
 }

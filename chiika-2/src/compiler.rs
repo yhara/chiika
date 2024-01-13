@@ -1,4 +1,5 @@
 use crate::ast::{self, FunTy, Ty};
+use crate::asyncness_check::gather_sigs;
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::collections::VecDeque;
@@ -27,7 +28,7 @@ impl Chapter {
 
 pub fn compile(ast: Vec<ast::Declaration>) -> Result<Vec<ast::Declaration>> {
     let mut c = Compiler {
-        sigs: gather_sigs(&ast),
+        sigs: gather_sigs(&ast)?,
         chapters: Default::default(),
     };
     let mut new_decls = vec![];
@@ -47,16 +48,6 @@ pub fn compile(ast: Vec<ast::Declaration>) -> Result<Vec<ast::Declaration>> {
         }
     }
     Ok(new_decls)
-}
-
-fn gather_sigs(decls: &[ast::Declaration]) -> HashMap<String, ast::FunTy> {
-    decls
-        .iter()
-        .map(|x| match x {
-            ast::Declaration::Extern(x) => (x.name.clone(), x.fun_ty()),
-            ast::Declaration::Function(x) => (x.name.clone(), x.fun_ty()),
-        })
-        .collect()
 }
 
 impl Compiler {
@@ -91,7 +82,11 @@ impl Compiler {
         }
     }
 
-    fn generate_split_funcs(&mut self, orig_func: ast::Function, mut chapters: VecDeque<Chapter>) -> Result<Vec<ast::Function>> {
+    fn generate_split_funcs(
+        &mut self,
+        orig_func: ast::Function,
+        mut chapters: VecDeque<Chapter>,
+    ) -> Result<Vec<ast::Function>> {
         let n_chapters = chapters.len();
         let mut i = 0;
         let mut last_chap_result_ty = None;
@@ -116,7 +111,7 @@ impl Compiler {
                         append_async_outro(chap.stmts, orig_func.ret_ty.clone())
                     } else {
                         chap.stmts
-                    }
+                    },
                 }
             };
             i += 1;
@@ -152,7 +147,7 @@ impl Compiler {
                     ast::Expr::FunCall(Box::new(ast::Expr::VarRef(fname)), new_args)
                 }
             }
-            ast::Expr::Cast(_, _) => panic!("chiika-2 does not have cast operation")
+            ast::Expr::Cast(_, _) => panic!("chiika-2 does not have cast operation"),
         };
         Ok(new_e)
     }
@@ -176,10 +171,7 @@ fn prepend_async_params(params: &[ast::Param], result_ty: Ty) -> Vec<ast::Param>
 fn prepend_async_intro(mut stmts: Vec<ast::Expr>) -> Vec<ast::Expr> {
     let env_push = ast::Expr::FunCall(
         Box::new(ast::Expr::var_ref("chiika_env_push")),
-        vec![
-            ast::Expr::var_ref("$env"),
-            ast::Expr::var_ref("$cont"),
-        ]
+        vec![ast::Expr::var_ref("$env"), ast::Expr::var_ref("$cont")],
     );
     stmts.insert(0, env_push);
     stmts
@@ -189,9 +181,7 @@ fn append_async_outro(mut stmts: Vec<ast::Expr>, result_ty: Ty) -> Vec<ast::Expr
     let result_value = stmts.pop().unwrap();
     let env_pop = ast::Expr::FunCall(
         Box::new(ast::Expr::var_ref("chiika_env_pop")),
-        vec![
-            ast::Expr::var_ref("$env"),
-        ]
+        vec![ast::Expr::var_ref("$env")],
     );
     let fun_ty = FunTy {
         is_async: false, // chiika-1 does not have notion of asyncness
@@ -201,10 +191,7 @@ fn append_async_outro(mut stmts: Vec<ast::Expr>, result_ty: Ty) -> Vec<ast::Expr
     let cast = ast::Expr::Cast(Box::new(env_pop), Ty::Fun(fun_ty));
     let call_cont = ast::Expr::FunCall(
         Box::new(cast),
-        vec![
-            ast::Expr::var_ref("$env"),
-            result_value,
-        ]
+        vec![ast::Expr::var_ref("$env"), result_value],
     );
     stmts.push(call_cont);
     stmts
