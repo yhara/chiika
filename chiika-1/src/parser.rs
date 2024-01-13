@@ -107,7 +107,7 @@ pub fn func_parser() -> impl Parser<char, ast::Function, Error = Simple<char>> {
         .then(params_parser().delimited_by(just('('), just(')')))
         .then_ignore(just("->").padded())
         .then(ty_parser().padded())
-        .then(stmts_parser().delimited_by(just('{'), just('}')))
+        .then(stmts_parser().padded().delimited_by(just('{'), just('}')))
         .map(|(((name, params), ret_ty), body_stmts)| ast::Function {
             name,
             params,

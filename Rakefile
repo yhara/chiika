@@ -1,6 +1,7 @@
 NAME = "a"
 CARGO_TARGET = ENV["SHIIKA_CARGO_TARGET"] || "./target"
 SRC_1 = Dir["chiika-1/src/**/*"]
+SRC_2 = Dir["chiika-2/src/**/*"]
 RUNTIME = Dir["chiika_runtime/**/*"]
 RUNTIME_A = File.expand_path "#{CARGO_TARGET}/debug/libchiika_runtime.a"
 CLANG = RUBY_PLATFORM =~ /linux/ ? "clang-16" : "clang"
@@ -11,9 +12,9 @@ file RUNTIME_A => [*RUNTIME] do
   end
 end
 
-file "#{NAME}.bc" => [*SRC_1] do
+file "#{NAME}.bc" => [*SRC_1, "#{NAME}.chiika1"] do
   cd "chiika-1" do
-    sh "cargo run"
+    sh "cargo run -- ../#{NAME}.chiika1"
   end
 end
 
@@ -27,12 +28,12 @@ file "#{NAME}.out" => [RUNTIME_A, "#{NAME}.bc"] do
     RUNTIME_A
 end
 
-task "1" => "#{NAME}.out" do
-  sh "./a.out"
+file "#{NAME}.chiika1" => [*SRC_2] do
+  cd "chiika-2" do
+    sh "cargo run > ../#{NAME}.chiika1"
+  end
 end
 
-task "a" do
-  cd "chiika-2" do
-    sh "cargo run"
-  end
+task "a" => "#{NAME}.out" do
+  sh "./a.out"
 end
