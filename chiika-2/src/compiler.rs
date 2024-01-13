@@ -69,10 +69,10 @@ impl Compiler {
         e
     }
 
-    fn compile_func(&mut self, f: ast::Function) -> Result<Vec<ast::Function>> {
+    fn compile_func(&mut self, mut f: ast::Function) -> Result<Vec<ast::Function>> {
         self.chapters.clear();
         self.chapters.push_back(Chapter::new());
-        for expr in f.body_stmts {
+        for expr in f.body_stmts.drain(..).collect::<Vec<_>>() {
             let new_expr = self.compile_expr(expr)?;
             self.chapters.back_mut().unwrap().stmts.push(new_expr);
         }
@@ -86,35 +86,39 @@ impl Compiler {
                 body_stmts: self.chapters.pop_front().unwrap().stmts,
             }])
         } else {
-            let mut i = 0;
-            let orig_name = f.name;
-            let mut last_chap_result_ty = None;
-            let mut split_funcs = vec![];
-            while let Some(chap) = self.chapters.pop_front() {
-                let new_func = if i == 0 {
-                    ast::Function {
-                        name: orig_name.clone(),
-                        params: prepend_async_params(&f.params, f.ret_ty.clone()),
-                        ret_ty: Ty::raw("$FUTURE"),
-                        body_stmts: chap.stmts,
-                    }
-                } else {
-                    ast::Function {
-                        name: chapter_func_name(&orig_name, i),
-                        params: vec![
-                            ast::Param::new(Ty::raw("$ENV"), "$env"),
-                            ast::Param::new(last_chap_result_ty.unwrap(), "$async_result"),
-                        ],
-                        ret_ty: Ty::raw("$FUTURE"),
-                        body_stmts: chap.stmts,
-                    }
-                };
-                i += 1;
-                last_chap_result_ty = Some(chap.async_result_ty);
-                split_funcs.push(new_func);
-            }
-            Ok(split_funcs)
+            let chaps = self.chapters.drain(..).collect();
+            self.generate_split_funcs(f, chaps)
         }
+    }
+
+    fn generate_split_funcs(&mut self, orig_func: ast::Function, mut chapters: VecDeque<Chapter>) -> Result<Vec<ast::Function>> {
+        let mut i = 0;
+        let mut last_chap_result_ty = None;
+        let mut split_funcs = vec![];
+        while let Some(chap) = chapters.pop_front() {
+            let new_func = if i == 0 {
+                ast::Function {
+                    name: orig_func.name.clone(),
+                    params: prepend_async_params(&orig_func.params, orig_func.ret_ty.clone()),
+                    ret_ty: Ty::raw("$FUTURE"),
+                    body_stmts: chap.stmts,
+                }
+            } else {
+                ast::Function {
+                    name: chapter_func_name(&orig_func.name, i),
+                    params: vec![
+                        ast::Param::new(Ty::raw("$ENV"), "$env"),
+                        ast::Param::new(last_chap_result_ty.unwrap(), "$async_result"),
+                    ],
+                    ret_ty: Ty::raw("$FUTURE"),
+                    body_stmts: chap.stmts,
+                }
+            };
+            i += 1;
+            last_chap_result_ty = Some(chap.async_result_ty);
+            split_funcs.push(new_func);
+        }
+        Ok(split_funcs)
     }
 
     fn compile_expr(&mut self, e: ast::Expr) -> Result<ast::Expr> {
