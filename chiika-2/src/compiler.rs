@@ -92,6 +92,7 @@ impl Compiler {
     }
 
     fn generate_split_funcs(&mut self, orig_func: ast::Function, mut chapters: VecDeque<Chapter>) -> Result<Vec<ast::Function>> {
+        let n_chapters = chapters.len();
         let mut i = 0;
         let mut last_chap_result_ty = None;
         let mut split_funcs = vec![];
@@ -101,7 +102,7 @@ impl Compiler {
                     name: orig_func.name.clone(),
                     params: prepend_async_params(&orig_func.params, orig_func.ret_ty.clone()),
                     ret_ty: Ty::raw("$FUTURE"),
-                    body_stmts: chap.stmts,
+                    body_stmts: prepend_async_intro(chap.stmts),
                 }
             } else {
                 ast::Function {
@@ -111,7 +112,11 @@ impl Compiler {
                         ast::Param::new(last_chap_result_ty.unwrap(), "$async_result"),
                     ],
                     ret_ty: Ty::raw("$FUTURE"),
-                    body_stmts: chap.stmts,
+                    body_stmts: if i == n_chapters - 1 {
+                        append_async_outro(chap.stmts, orig_func.ret_ty.clone())
+                    } else {
+                        chap.stmts
+                    }
                 }
             };
             i += 1;
@@ -147,6 +152,7 @@ impl Compiler {
                     ast::Expr::FunCall(Box::new(ast::Expr::VarRef(fname)), new_args)
                 }
             }
+            ast::Expr::Cast(_, _) => panic!("chiika-2 does not have cast operation")
         };
         Ok(new_e)
     }
@@ -167,7 +173,44 @@ fn prepend_async_params(params: &[ast::Param], result_ty: Ty) -> Vec<ast::Param>
     new_params
 }
 
-// Create name of generated function like `foo_1`
+fn prepend_async_intro(mut stmts: Vec<ast::Expr>) -> Vec<ast::Expr> {
+    let env_push = ast::Expr::FunCall(
+        Box::new(ast::Expr::var_ref("chiika_env_push")),
+        vec![
+            ast::Expr::var_ref("$env"),
+            ast::Expr::var_ref("$cont"),
+        ]
+    );
+    stmts.insert(0, env_push);
+    stmts
+}
+
+fn append_async_outro(mut stmts: Vec<ast::Expr>, result_ty: Ty) -> Vec<ast::Expr> {
+    let result_value = stmts.pop().unwrap();
+    let env_pop = ast::Expr::FunCall(
+        Box::new(ast::Expr::var_ref("chiika_env_pop")),
+        vec![
+            ast::Expr::var_ref("$env"),
+        ]
+    );
+    let fun_ty = FunTy {
+        is_async: false, // chiika-1 does not have notion of asyncness
+        param_tys: vec![Ty::raw("$ENV"), result_ty],
+        ret_ty: Box::new(Ty::raw("$FUTURE")),
+    };
+    let cast = ast::Expr::Cast(Box::new(env_pop), Ty::Fun(fun_ty));
+    let call_cont = ast::Expr::FunCall(
+        Box::new(cast),
+        vec![
+            ast::Expr::var_ref("$env"),
+            result_value,
+        ]
+    );
+    stmts.push(call_cont);
+    stmts
+}
+
+/// Create name of generated function like `foo_1`
 fn chapter_func_name(orig_name: &str, chapter_idx: usize) -> String {
     format!("{}_{}", orig_name, chapter_idx)
 }

@@ -81,7 +81,7 @@ pub enum Expr {
     VarRef(String),
     //OpCall(BinOp, Box<Expr>, Box<Expr>),
     FunCall(Box<Expr>, Vec<Expr>),
-    //Cast(Box<Expr>, Ty),
+    Cast(Box<Expr>, Ty),
 }
 
 pub fn to_source(ast: Vec<Declaration>) -> String {
@@ -89,6 +89,12 @@ pub fn to_source(ast: Vec<Declaration>) -> String {
         .map(|x| x.to_string())
         .collect::<Vec<_>>()
         .join("")
+}
+
+impl Expr {
+    pub fn var_ref(name: &str) -> Expr {
+        Expr::VarRef(name.to_string())
+    }
 }
 
 impl std::fmt::Display for Declaration {
@@ -172,6 +178,8 @@ impl std::fmt::Display for Expr {
                     .join(", ");
                 write!(f, "{}({})", fexpr, args)
             }
+            Expr::Cast(expr, ty) =>
+                write!(f, "($CAST({} as {}))", expr, ty)
         }
     }
 }
