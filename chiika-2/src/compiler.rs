@@ -97,7 +97,7 @@ impl Compiler {
                     name: orig_func.name.clone(),
                     params: prepend_async_params(&orig_func.params, orig_func.ret_ty.clone()),
                     ret_ty: Ty::raw("$FUTURE"),
-                    body_stmts: prepend_async_intro(chap.stmts),
+                    body_stmts: prepend_async_intro(&orig_func, chap.stmts),
                 }
             } else {
                 ast::Function {
@@ -108,7 +108,7 @@ impl Compiler {
                     ],
                     ret_ty: Ty::raw("$FUTURE"),
                     body_stmts: if i == n_chapters - 1 {
-                        append_async_outro(chap.stmts, orig_func.ret_ty.clone())
+                        append_async_outro(&orig_func, chap.stmts, orig_func.ret_ty.clone())
                     } else {
                         chap.stmts
                     },
@@ -173,20 +173,26 @@ fn prepend_async_params(params: &[ast::Param], result_ty: Ty) -> Vec<ast::Param>
     new_params
 }
 
-fn prepend_async_intro(mut stmts: Vec<ast::Expr>) -> Vec<ast::Expr> {
-    let env_push = ast::Expr::FunCall(
-        Box::new(ast::Expr::var_ref("chiika_env_push")),
-        vec![ast::Expr::var_ref("$env"), ast::Expr::var_ref("$cont")],
-    );
-    stmts.insert(0, env_push);
-    stmts
+fn prepend_async_intro(orig_func: &ast::Function, mut stmts: Vec<ast::Expr>) -> Vec<ast::Expr> {
+    let push_items = vec![ast::Expr::var_ref("$cont")].into_iter().chain(
+        orig_func.params.iter().map(|param| ast::Expr::var_ref(&param.name)));
+
+    let mut push_calls = push_items.map(|arg|
+        ast::Expr::FunCall(
+            Box::new(ast::Expr::var_ref("chiika_env_push")),
+            vec![ast::Expr::var_ref("$env"), arg],
+        )
+    ).collect::<Vec<_>>();
+    push_calls.append(&mut stmts);
+    push_calls
 }
 
-fn append_async_outro(mut stmts: Vec<ast::Expr>, result_ty: Ty) -> Vec<ast::Expr> {
+fn append_async_outro(orig_func: &ast::Function, mut stmts: Vec<ast::Expr>, result_ty: Ty) -> Vec<ast::Expr> {
     let result_value = stmts.pop().unwrap();
+    let n_pop = orig_func.params.len() + 1; // +1 for $cont
     let env_pop = ast::Expr::FunCall(
         Box::new(ast::Expr::var_ref("chiika_env_pop")),
-        vec![ast::Expr::var_ref("$env")],
+        vec![ast::Expr::var_ref("$env"), ast::Expr::Number(n_pop as i64)],
     );
     let fun_ty = FunTy {
         is_async: false, // chiika-1 does not have notion of asyncness
