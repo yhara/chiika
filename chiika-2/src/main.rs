@@ -2,7 +2,7 @@ mod ast;
 mod asyncness_check;
 mod compiler;
 mod parser;
-use anyhow::{bail, Result};
+use anyhow::{bail, Result, Context};
 use ariadne::{Label, Report, ReportKind, Source};
 use chumsky::Parser;
 use parser::parser;
@@ -17,25 +17,18 @@ fn print_parse_error(src: &str, span: std::ops::Range<usize>, msg: String) {
 }
 
 fn main() -> Result<()> {
-    let src = "
-      extern print(int n) -> int;
-      extern_async sleep_sec(int n) -> int;
-      fun foo() -> int {
-        print(100);
-        print(sleep_sec(1));
-        print(200);
-        300
-      }
-      fun chiika_main() -> int {
-        print(foo());
-        0
-      }
-    ";
+    let args = std::env::args().collect::<Vec<_>>();
+    let Some(path) = args.get(1) else {
+        bail!("usage: chiika-2 a.chiika2 > a.chiika1");
+    };
+    let src = std::fs::read_to_string(path)
+        .context(format!("failed to read {}", path))?;
     let ast = match parser().parse(src) {
         Ok(x) => x,
         Err(errs) => {
+            let src = std::fs::read_to_string(path)?;
             errs.into_iter().for_each(|e| {
-                print_parse_error(src, e.span(), e.to_string());
+                print_parse_error(&src, e.span(), e.to_string());
             });
             bail!("");
         }

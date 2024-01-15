@@ -28,12 +28,14 @@ file "#{NAME}.out" => [RUNTIME_A, "#{NAME}.bc"] do
     RUNTIME_A
 end
 
-file "#{NAME}.chiika1" => [*SRC_2] do
+file "#{NAME}.chiika1" => [*SRC_2, "#{NAME}.chiika2"] do
   cd "chiika-2" do
-    sh "cargo run > ../#{NAME}.chiika1"
+    sh "cargo run -- ../#{NAME}.chiika2 > ../#{NAME}.chiika1"
   end
 end
 
 task "a" => "#{NAME}.out" do
   sh "./a.out"
 end
+
+task default: "a"
