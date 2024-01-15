@@ -7,13 +7,15 @@ use ariadne::{Label, Report, ReportKind, Source};
 use chumsky::Parser;
 use parser::parser;
 
-fn print_parse_error(src: &str, span: std::ops::Range<usize>, msg: String) {
+fn render_parse_error(src: &str, span: std::ops::Range<usize>, msg: String) -> String {
+    let mut rendered = vec![];
     Report::build(ReportKind::Error, "", span.start)
         .with_message(msg.clone())
         .with_label(Label::new(("", span)).with_message(msg))
         .finish()
-        .print(("", Source::from(src)))
+        .write(("", Source::from(src)), &mut rendered)
         .unwrap();
+    String::from_utf8_lossy(&rendered).to_string()
 }
 
 fn main() -> Result<()> {
@@ -27,10 +29,11 @@ fn main() -> Result<()> {
         Ok(x) => x,
         Err(errs) => {
             let src = std::fs::read_to_string(path)?;
+            let mut s = String::new();
             errs.into_iter().for_each(|e| {
-                print_parse_error(&src, e.span(), e.to_string());
+                s += &render_parse_error(&src, e.span(), e.to_string());
             });
-            bail!("");
+            bail!(s);
         }
     };
     let compiled = compiler::compile(ast)?;
