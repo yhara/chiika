@@ -31,3 +31,10 @@ pub extern "C" fn chiika_env_pop(env: *mut ChiikaEnv, n: i64) -> i64 {
         item
     }
 }
+
+/// Peek the n-th item (from the stack top) 
+#[no_mangle]
+pub extern "C" fn chiika_env_ref(env: *mut ChiikaEnv, n: i64) -> i64 {
+    let stack = unsafe { &(*env).stack };
+    stack[stack.len() - (n as usize)]
+}

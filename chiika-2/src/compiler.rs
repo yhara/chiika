@@ -64,7 +64,7 @@ impl Compiler {
         self.chapters.clear();
         self.chapters.push_back(Chapter::new());
         for expr in f.body_stmts.drain(..).collect::<Vec<_>>() {
-            let new_expr = self.compile_expr(&f.name, expr)?;
+            let new_expr = self.compile_expr(&f, expr)?;
             self.chapters.back_mut().unwrap().stmts.push(new_expr);
         }
 
@@ -121,14 +121,30 @@ impl Compiler {
         Ok(split_funcs)
     }
 
-    fn compile_expr(&mut self, fname: &str, e: ast::Expr) -> Result<ast::Expr> {
+    fn compile_expr(&mut self, orig_func: &ast::Function, e: ast::Expr) -> Result<ast::Expr> {
         let new_e = match e {
             ast::Expr::Number(_) => e,
-            ast::Expr::VarRef(_) => e,
+            ast::Expr::VarRef(ref name) => {
+                if self.sigs.contains_key(name) {
+                    e
+                } else if self.chapters.len() == 1 {
+                    // The variable is just there in the first chapter
+                    e
+                } else {
+                    let idx = orig_func.params.iter().position(|x| x.name == *name)
+                        .expect(&format!("unknown variable `{}'", name));
+                    ast::Expr::FunCall(
+                        Box::new(ast::Expr::var_ref("chiika_env_ref")),
+                        vec![
+                        ast::Expr::var_ref("$env"), ast::Expr::Number(idx as i64)
+                        ],
+                    )
+                }
+            },
             ast::Expr::FunCall(fexpr, arg_exprs) => {
                 let mut new_args = arg_exprs
                     .into_iter()
-                    .map(|x| self.compile_expr(fname, x))
+                    .map(|x| self.compile_expr(orig_func, x))
                     .collect::<Result<Vec<_>>>()?;
                 let ast::Expr::VarRef(callee_name) = *fexpr else {
                     return Err(anyhow!("not a function: {:?}", fexpr));
@@ -138,7 +154,7 @@ impl Compiler {
                 };
                 if fun_ty.is_async {
                     new_args.insert(0, ast::Expr::var_ref("$env"));
-                    new_args.insert(1, ast::Expr::var_ref(chapter_func_name(fname, self.chapters.len())));
+                    new_args.insert(1, ast::Expr::var_ref(chapter_func_name(&orig_func.name, self.chapters.len())));
                     let cps_call = ast::Expr::FunCall(Box::new(ast::Expr::VarRef(callee_name)), new_args);
 
                     // Change chapter here

@@ -40,7 +40,8 @@ fn main() -> Result<()> {
     println!(
         "
 extern chiika_env_push($ENV $env, any obj) -> int;
-extern chiika_env_pop($ENV $env) -> any;
+extern chiika_env_pop($ENV $env, int n) -> any;
+extern chiika_env_ref($ENV $env, int n) -> int;
 extern chiika_start_tokio(int n) -> int;
 func main() -> int {{
   chiika_start_tokio(0);
