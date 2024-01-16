@@ -36,5 +36,5 @@ pub extern "C" fn chiika_env_pop(env: *mut ChiikaEnv, n: i64) -> i64 {
 #[no_mangle]
 pub extern "C" fn chiika_env_ref(env: *mut ChiikaEnv, n: i64) -> i64 {
     let stack = unsafe { &(*env).stack };
-    stack[stack.len() - (n as usize)]
+    stack[stack.len() - 1 - (n as usize)]
 }
