@@ -1,6 +1,7 @@
 
-extern chiika_env_push($ENV $env, any obj) -> int;
-extern chiika_env_pop($ENV $env) -> any;
+extern chiika_env_push($ENV $env, $any obj) -> int;
+extern chiika_env_pop($ENV $env, int n) -> $any;
+extern chiika_env_ref($ENV $env, int n) -> int;
 extern chiika_start_tokio(int n) -> int;
 func main() -> int {
   chiika_start_tokio(0);
@@ -9,22 +10,23 @@ func main() -> int {
 
 extern print(int n) -> int;
 extern sleep_sec($ENV $env, $FN(($ENV, int) -> $FUTURE) $cont, int n) -> $FUTURE;
-func foo($ENV $env, $FN(($ENV, int) -> $FUTURE) $cont) -> $FUTURE {
-  chiika_env_push($env, $cont);
+func foo($ENV $env, $FN(($ENV, int) -> $FUTURE) $cont, int a) -> $FUTURE {
+  chiika_env_push($env, ($CAST($cont as $any)));
+  chiika_env_push($env, ($CAST(a as $any)));
   print(100);
   sleep_sec($env, foo_1, 1);
 }
 func foo_1($ENV $env, int $async_result) -> $FUTURE {
   print($async_result);
-  print(200);
-  ($CAST(chiika_env_pop($env) as $FN(($ENV, int) -> $FUTURE)))($env, 300);
+  print(chiika_env_ref($env, 0));
+  ($CAST(chiika_env_pop($env, 2) as $FN(($ENV, int) -> $FUTURE)))($env, 300);
 }
 func chiika_main($ENV $env, $FN(($ENV, int) -> $FUTURE) $cont) -> $FUTURE {
-  chiika_env_push($env, $cont);
-  foo($env, chiika_main_1);
+  chiika_env_push($env, ($CAST($cont as $any)));
+  foo($env, chiika_main_1, 123);
 }
 func chiika_main_1($ENV $env, int $async_result) -> $FUTURE {
   print($async_result);
-  ($CAST(chiika_env_pop($env) as $FN(($ENV, int) -> $FUTURE)))($env, 0);
+  ($CAST(chiika_env_pop($env, 1) as $FN(($ENV, int) -> $FUTURE)))($env, 0);
 }
 

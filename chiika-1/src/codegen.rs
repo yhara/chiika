@@ -16,6 +16,7 @@ pub struct CodeGen<'run, 'ictx: 'run> {
 #[derive(Debug, Clone)]
 enum LlvmValue<'ictx> {
     Int(inkwell::values::IntValue<'ictx>),
+    Any(inkwell::values::IntValue<'ictx>),
     // Values whose internal is unknown to Chiika. Handled as `i8*`
     Opaque(inkwell::values::PointerValue<'ictx>),
     Func(inkwell::values::FunctionValue<'ictx>, ast::FunTy),
@@ -26,10 +27,21 @@ impl<'ictx> LlvmValue<'ictx> {
     fn into_arg_value(self) -> inkwell::values::BasicValueEnum<'ictx> {
         match self {
             LlvmValue::Int(x) => x.into(),
+            LlvmValue::Any(x) => x.into(),
             LlvmValue::Opaque(x) => x.into(),
             LlvmValue::Func(x, _) => x.as_global_value().as_basic_value_enum(),
             LlvmValue::FuncPtr(x, _) => x.into(),
         }
+    }
+
+    fn into_integer(self, t: inkwell::types::IntType<'ictx>) -> inkwell::values::IntValue<'ictx> {
+        let ptr = match self {
+            LlvmValue::Int(x) | LlvmValue::Any(x) => return x,
+            LlvmValue::Opaque(x) => x,
+            LlvmValue::Func(x, _) => x.as_global_value().as_pointer_value(),
+            LlvmValue::FuncPtr(x, _) => x,
+        };
+        ptr.const_to_int(t)
     }
 
     fn expect_int(self) -> Result<inkwell::values::IntValue<'ictx>> {
@@ -50,14 +62,16 @@ pub fn run(ast: Vec<ast::Declaration>) -> Result<()> {
     let code_gen = CodeGen::new(funcs, sigs, &context, &module, &builder);
     code_gen.gen_declares(&externs);
     code_gen.gen_program()?;
-    code_gen
-        .module
-        .write_bitcode_to_path(std::path::Path::new("../a.bc"));
+    log("Finished compilation.");
     code_gen
         .module
         .print_to_file("../a.ll")
         .map_err(|llvm_str| anyhow!("{}", llvm_str.to_string()))?;
-    log("Generated a.bc and a.ll");
+    log("Wrote a.ll.");
+    code_gen
+        .module
+        .write_bitcode_to_path(std::path::Path::new("../a.bc"));
+    log("Wrote a.bc.");
     Ok(())
 }
 
@@ -100,7 +114,7 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
     fn llvm_type(&self, ty: &ast::Ty) -> inkwell::types::BasicTypeEnum<'ictx> {
         match ty {
             ast::Ty::Raw(name) => match &name[..] {
-                "any" => self.context.i8_type().ptr_type(Default::default()).into(),
+                "$any" => self.context.i64_type().into(),
                 "int" => self.context.i64_type().into(),
                 "$ENV" => self.context.i8_type().ptr_type(Default::default()).into(),
                 "$FUTURE" => self.context.i8_type().ptr_type(Default::default()).into(),
@@ -122,24 +136,35 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
         let cast = match ty {
             ast::Ty::Raw(name) => match &name[..] {
                 "int" => LlvmValue::Int(v.try_into().map_err(|_| anyhow!("not int"))?),
-                "$ENV" | "$FUTURE" | "any" =>
+                "$any" => LlvmValue::Any(v.try_into().map_err(|_| anyhow!("not int(any)"))?),
+                "$ENV" | "$FUTURE" =>
                     LlvmValue::Opaque(v.try_into().map_err(|_| anyhow!("not {:?}: {:?}", ty, v))?),
                 _ => panic!("unknown chiika-1 type to cast: `{:?}', value: {:?}", ty, v),
             },
             ast::Ty::Fun(fun_ty) => LlvmValue::FuncPtr(
-                v.try_into().map_err(|_| anyhow!("not func"))?,
+                v.try_into().map_err(|_| anyhow!("not func: {:?}", v))?,
                 fun_ty.clone(),
             ),
         };
         Ok(cast)
     }
 
-    #[allow(unreachable_code)]
+    /// Cast LlvmValue to `ty`
     fn recast(&self, v: LlvmValue<'ictx>, ty: &ast::Ty) -> Result<LlvmValue<'ictx>> {
-        let LlvmValue::Opaque(ptr) = v else {
-            return Err(anyhow!("only Opaque can be recast but got {:?}", v));
+        let vv = match (v, ty) {
+            (LlvmValue::Any(n), ast::Ty::Fun(_)) => {
+                let t = self.context.i8_type().ptr_type(Default::default());
+                self.builder.build_int_to_ptr(n, t, "f").into()
+            }
+            (v, _) => {
+                if *ty == ast::Ty::Raw("$any".to_string()) {
+                    v.into_integer(self.context.i64_type()).into()
+                } else {
+                    v.into_arg_value()
+                }
+            }
         };
-        self.cast(ptr.into(), ty)
+        self.cast(vv, ty)
     }
 
     fn gen_declares(&self, externs: &[ast::Extern]) {

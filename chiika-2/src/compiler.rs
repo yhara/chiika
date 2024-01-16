@@ -193,12 +193,16 @@ fn prepend_async_intro(orig_func: &ast::Function, mut stmts: Vec<ast::Expr>) -> 
     let push_items = vec![ast::Expr::var_ref("$cont")].into_iter().chain(
         orig_func.params.iter().map(|param| ast::Expr::var_ref(&param.name)));
 
-    let mut push_calls = push_items.map(|arg|
+    let mut push_calls = push_items.map(|arg| {
+        let cast = ast::Expr::Cast(
+            Box::new(arg),
+            ast::Ty::raw("$any"),
+            );
         ast::Expr::FunCall(
             Box::new(ast::Expr::var_ref("chiika_env_push")),
-            vec![ast::Expr::var_ref("$env"), arg],
+            vec![ast::Expr::var_ref("$env"), cast],
         )
-    ).collect::<Vec<_>>();
+    }).collect::<Vec<_>>();
     push_calls.append(&mut stmts);
     push_calls
 }
