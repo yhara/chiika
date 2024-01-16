@@ -123,6 +123,7 @@ impl Compiler {
 
     fn compile_expr(&mut self, orig_func: &ast::Function, e: ast::Expr) -> Result<ast::Expr> {
         let new_e = match e {
+            ast::Expr::Alloc(_) => e,
             ast::Expr::Number(_) => e,
             ast::Expr::VarRef(ref name) => {
                 if self.sigs.contains_key(name) {
@@ -174,6 +175,9 @@ impl Compiler {
                 }
             }
             ast::Expr::Cast(_, _) => panic!("chiika-2 does not have cast operation"),
+            ast::Expr::Assign(name, rhs) => {
+                ast::Expr::Assign(name, Box::new(self.compile_expr(orig_func, *rhs)?))
+            }
         };
         Ok(new_e)
     }

@@ -62,7 +62,19 @@ fn expr_parser() -> impl Parser<char, ast::Expr, Error = Simple<char>> {
         //let sum = atomic_parser(expr.clone())
         //    .then(bin_op.padded().then(atomic_parser(expr.clone())).repeated())
         //    .foldl(|lhs, (op, rhs)| ast::Expr::OpCall(op, Box::new(lhs), Box::new(rhs)));
-        atomic_parser(expr)
+
+        let alloc = just("alloc")
+            .padded()
+            .ignore_then(ident_parser())
+            .map(ast::Expr::Alloc);
+
+        let assign = ident_parser()
+            .padded()
+            .then_ignore(just('=').padded())
+            .then(expr.clone())
+            .map(|(name, rhs)| ast::Expr::Assign(name, Box::new(rhs)));
+
+        alloc.or(assign).or(atomic_parser(expr))
     })
 }
 

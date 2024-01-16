@@ -23,7 +23,9 @@ func foo_1($ENV $env, int $async_result) -> $FUTURE {
 }
 func chiika_main($ENV $env, $FN(($ENV, int) -> $FUTURE) $cont) -> $FUTURE {
   chiika_env_push($env, ($CAST($cont as $any)));
-  foo($env, chiika_main_1, 123);
+  alloc a;
+  a = 234;
+  foo($env, chiika_main_1, a);
 }
 func chiika_main_1($ENV $env, int $async_result) -> $FUTURE {
   print($async_result);

@@ -79,7 +79,18 @@ pub fn expr_parser() -> impl Parser<char, ast::Expr, Error = Simple<char>> {
             .ignore_then(in_cast.delimited_by(just('('), just(')')))
             .map(|(expr, ty)| ast::Expr::Cast(Box::new(expr), ty));
 
-        cast.or(sum).or(atomic_parser(expr))
+        let alloc = just("alloc")
+            .padded()
+            .ignore_then(ident_parser())
+            .map(ast::Expr::Alloc);
+
+        let assign = ident_parser()
+            .padded()
+            .then_ignore(just('=').padded())
+            .then(expr.clone())
+            .map(|(name, rhs)| ast::Expr::Assign(name, Box::new(rhs)));
+
+        alloc.or(assign).or(cast).or(sum).or(atomic_parser(expr))
     })
 }
 

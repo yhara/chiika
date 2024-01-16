@@ -11,6 +11,8 @@ pub enum Expr {
     OpCall(BinOp, Box<Expr>, Box<Expr>),
     FunCall(Box<Expr>, Vec<Expr>),
     Cast(Box<Expr>, Ty),
+    Alloc(String),
+    Assign(String, Box<Expr>),
 }
 
 #[derive(PartialEq, Debug, Clone)]
