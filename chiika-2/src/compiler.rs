@@ -64,7 +64,7 @@ impl Compiler {
         self.chapters.clear();
         self.chapters.push_back(Chapter::new());
         for expr in f.body_stmts.drain(..).collect::<Vec<_>>() {
-            let new_expr = self.compile_expr(&f.name, expr)?;
+            let new_expr = self.compile_expr(&f, expr)?;
             self.chapters.back_mut().unwrap().stmts.push(new_expr);
         }
 
@@ -97,7 +97,7 @@ impl Compiler {
                     name: orig_func.name.clone(),
                     params: prepend_async_params(&orig_func.params, orig_func.ret_ty.clone()),
                     ret_ty: Ty::raw("$FUTURE"),
-                    body_stmts: prepend_async_intro(chap.stmts),
+                    body_stmts: prepend_async_intro(&orig_func, chap.stmts),
                 }
             } else {
                 ast::Function {
@@ -108,7 +108,7 @@ impl Compiler {
                     ],
                     ret_ty: Ty::raw("$FUTURE"),
                     body_stmts: if i == n_chapters - 1 {
-                        append_async_outro(chap.stmts, orig_func.ret_ty.clone())
+                        append_async_outro(&orig_func, chap.stmts, orig_func.ret_ty.clone())
                     } else {
                         chap.stmts
                     },
@@ -121,14 +121,30 @@ impl Compiler {
         Ok(split_funcs)
     }
 
-    fn compile_expr(&mut self, fname: &str, e: ast::Expr) -> Result<ast::Expr> {
+    fn compile_expr(&mut self, orig_func: &ast::Function, e: ast::Expr) -> Result<ast::Expr> {
         let new_e = match e {
             ast::Expr::Number(_) => e,
-            ast::Expr::VarRef(_) => e,
+            ast::Expr::VarRef(ref name) => {
+                if self.sigs.contains_key(name) {
+                    e
+                } else if self.chapters.len() == 1 {
+                    // The variable is just there in the first chapter
+                    e
+                } else {
+                    let idx = orig_func.params.iter().position(|x| x.name == *name)
+                        .expect(&format!("unknown variable `{}'", name));
+                    ast::Expr::FunCall(
+                        Box::new(ast::Expr::var_ref("chiika_env_ref")),
+                        vec![
+                        ast::Expr::var_ref("$env"), ast::Expr::Number(idx as i64)
+                        ],
+                    )
+                }
+            },
             ast::Expr::FunCall(fexpr, arg_exprs) => {
                 let mut new_args = arg_exprs
                     .into_iter()
-                    .map(|x| self.compile_expr(fname, x))
+                    .map(|x| self.compile_expr(orig_func, x))
                     .collect::<Result<Vec<_>>>()?;
                 let ast::Expr::VarRef(callee_name) = *fexpr else {
                     return Err(anyhow!("not a function: {:?}", fexpr));
@@ -138,7 +154,7 @@ impl Compiler {
                 };
                 if fun_ty.is_async {
                     new_args.insert(0, ast::Expr::var_ref("$env"));
-                    new_args.insert(1, ast::Expr::var_ref(chapter_func_name(fname, self.chapters.len())));
+                    new_args.insert(1, ast::Expr::var_ref(chapter_func_name(&orig_func.name, self.chapters.len())));
                     let cps_call = ast::Expr::FunCall(Box::new(ast::Expr::VarRef(callee_name)), new_args);
 
                     // Change chapter here
@@ -173,20 +189,30 @@ fn prepend_async_params(params: &[ast::Param], result_ty: Ty) -> Vec<ast::Param>
     new_params
 }
 
-fn prepend_async_intro(mut stmts: Vec<ast::Expr>) -> Vec<ast::Expr> {
-    let env_push = ast::Expr::FunCall(
-        Box::new(ast::Expr::var_ref("chiika_env_push")),
-        vec![ast::Expr::var_ref("$env"), ast::Expr::var_ref("$cont")],
-    );
-    stmts.insert(0, env_push);
-    stmts
+fn prepend_async_intro(orig_func: &ast::Function, mut stmts: Vec<ast::Expr>) -> Vec<ast::Expr> {
+    let push_items = vec![ast::Expr::var_ref("$cont")].into_iter().chain(
+        orig_func.params.iter().map(|param| ast::Expr::var_ref(&param.name)));
+
+    let mut push_calls = push_items.map(|arg| {
+        let cast = ast::Expr::Cast(
+            Box::new(arg),
+            ast::Ty::raw("$any"),
+            );
+        ast::Expr::FunCall(
+            Box::new(ast::Expr::var_ref("chiika_env_push")),
+            vec![ast::Expr::var_ref("$env"), cast],
+        )
+    }).collect::<Vec<_>>();
+    push_calls.append(&mut stmts);
+    push_calls
 }
 
-fn append_async_outro(mut stmts: Vec<ast::Expr>, result_ty: Ty) -> Vec<ast::Expr> {
+fn append_async_outro(orig_func: &ast::Function, mut stmts: Vec<ast::Expr>, result_ty: Ty) -> Vec<ast::Expr> {
     let result_value = stmts.pop().unwrap();
+    let n_pop = orig_func.params.len() + 1; // +1 for $cont
     let env_pop = ast::Expr::FunCall(
         Box::new(ast::Expr::var_ref("chiika_env_pop")),
-        vec![ast::Expr::var_ref("$env")],
+        vec![ast::Expr::var_ref("$env"), ast::Expr::Number(n_pop as i64)],
     );
     let fun_ty = FunTy {
         is_async: false, // chiika-1 does not have notion of asyncness
