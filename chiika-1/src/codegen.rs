@@ -76,7 +76,9 @@ pub fn run(ast: Vec<ast::Declaration>) -> Result<()> {
 }
 
 fn gather_sigs(externs: &[ast::Extern], funcs: &[ast::Function]) -> HashMap<String, ast::FunTy> {
-    let tys = externs.iter().map(|x| (x.name.clone(), x.fun_ty()))
+    let tys = externs
+        .iter()
+        .map(|x| (x.name.clone(), x.fun_ty()))
         .chain(funcs.iter().map(|x| (x.name.clone(), x.fun_ty())));
     tys.collect()
 }
@@ -103,12 +105,12 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
     }
 
     fn llvm_fn_type(&self, ty: &ast::FunTy) -> inkwell::types::FunctionType<'ictx> {
-        let params = ty.param_tys
+        let params = ty
+            .param_tys
             .iter()
             .map(|x| self.llvm_type(x).into())
             .collect::<Vec<_>>();
-        self.llvm_type(&ty.ret_ty)
-            .fn_type(&params, false)
+        self.llvm_type(&ty.ret_ty).fn_type(&params, false)
     }
 
     fn llvm_type(&self, ty: &ast::Ty) -> inkwell::types::BasicTypeEnum<'ictx> {
@@ -120,11 +122,7 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
                 "$FUTURE" => self.context.i8_type().ptr_type(Default::default()).into(),
                 _ => panic!("unknown chiika-1 type `{:?}'", ty),
             },
-            ast::Ty::Fun(x) => {
-                self.llvm_fn_type(x)
-                    .ptr_type(Default::default())
-                    .into()
-            }
+            ast::Ty::Fun(x) => self.llvm_fn_type(x).ptr_type(Default::default()).into(),
         }
     }
 
@@ -137,8 +135,9 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
             ast::Ty::Raw(name) => match &name[..] {
                 "int" => LlvmValue::Int(v.try_into().map_err(|_| anyhow!("not int"))?),
                 "$any" => LlvmValue::Any(v.try_into().map_err(|_| anyhow!("not int(any)"))?),
-                "$ENV" | "$FUTURE" =>
-                    LlvmValue::Opaque(v.try_into().map_err(|_| anyhow!("not {:?}: {:?}", ty, v))?),
+                "$ENV" | "$FUTURE" => {
+                    LlvmValue::Opaque(v.try_into().map_err(|_| anyhow!("not {:?}: {:?}", ty, v))?)
+                }
                 _ => panic!("unknown chiika-1 type to cast: `{:?}', value: {:?}", ty, v),
             },
             ast::Ty::Fun(fun_ty) => LlvmValue::FuncPtr(
@@ -207,8 +206,7 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
         for i in 0..stmts.len() {
             let v = self.gen_expr(func, &stmts[i])?;
             if i == stmts.len() - 1 {
-                self.builder
-                    .build_return(Some(&v.into_arg_value()));
+                self.builder.build_return(Some(&v.into_arg_value()));
             }
         }
         Ok(())
@@ -229,7 +227,9 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
                         .module
                         .get_function(s)
                         .context(format!("unknown variable or function '{}'", s))?;
-                    let fun_ty = self.signatures.get(s)
+                    let fun_ty = self
+                        .signatures
+                        .get(s)
                         .expect(&format!("function {} not found", s));
                     LlvmValue::Func(f, fun_ty.clone())
                 }
@@ -251,22 +251,24 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
                     .map(|arg| arg.into_arg_value().into())
                     .collect::<Vec<_>>();
                 let (x, fun_ty) = match self.gen_expr(func, func_expr)? {
-                    LlvmValue::Func(f, fun_ty) => {
-                        (self.builder
+                    LlvmValue::Func(f, fun_ty) => (
+                        self.builder
                             .build_direct_call(f, &args, "result")
                             .try_as_basic_value()
                             .unwrap_left(),
-                            fun_ty)
-                    }
+                        fun_ty,
+                    ),
                     LlvmValue::FuncPtr(fptr, fun_ty) => {
                         let ftype = self.llvm_fn_type(&fun_ty);
-                        (self.builder
-                            .build_indirect_call(ftype, fptr, &args, "result")
-                            .try_as_basic_value()
-                            .unwrap_left(),
-                            fun_ty)
+                        (
+                            self.builder
+                                .build_indirect_call(ftype, fptr, &args, "result")
+                                .try_as_basic_value()
+                                .unwrap_left(),
+                            fun_ty,
+                        )
                     }
-                    _ => return Err(anyhow!("not a function: {:?}", expr)) 
+                    _ => return Err(anyhow!("not a function: {:?}", expr)),
                 };
                 self.cast(x.as_basic_value_enum(), &fun_ty.ret_ty)?
             }

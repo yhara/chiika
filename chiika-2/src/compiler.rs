@@ -131,16 +131,17 @@ impl Compiler {
                     // The variable is just there in the first chapter
                     e
                 } else {
-                    let idx = orig_func.params.iter().position(|x| x.name == *name)
+                    let idx = orig_func
+                        .params
+                        .iter()
+                        .position(|x| x.name == *name)
                         .expect(&format!("unknown variable `{}'", name));
                     ast::Expr::FunCall(
                         Box::new(ast::Expr::var_ref("chiika_env_ref")),
-                        vec![
-                        ast::Expr::var_ref("$env"), ast::Expr::Number(idx as i64)
-                        ],
+                        vec![ast::Expr::var_ref("$env"), ast::Expr::Number(idx as i64)],
                     )
                 }
-            },
+            }
             ast::Expr::FunCall(fexpr, arg_exprs) => {
                 let mut new_args = arg_exprs
                     .into_iter()
@@ -154,8 +155,12 @@ impl Compiler {
                 };
                 if fun_ty.is_async {
                     new_args.insert(0, ast::Expr::var_ref("$env"));
-                    new_args.insert(1, ast::Expr::var_ref(chapter_func_name(&orig_func.name, self.chapters.len())));
-                    let cps_call = ast::Expr::FunCall(Box::new(ast::Expr::VarRef(callee_name)), new_args);
+                    new_args.insert(
+                        1,
+                        ast::Expr::var_ref(chapter_func_name(&orig_func.name, self.chapters.len())),
+                    );
+                    let cps_call =
+                        ast::Expr::FunCall(Box::new(ast::Expr::VarRef(callee_name)), new_args);
 
                     // Change chapter here
                     let last_chapter = self.chapters.back_mut().unwrap();
@@ -191,23 +196,30 @@ fn prepend_async_params(params: &[ast::Param], result_ty: Ty) -> Vec<ast::Param>
 
 fn prepend_async_intro(orig_func: &ast::Function, mut stmts: Vec<ast::Expr>) -> Vec<ast::Expr> {
     let push_items = vec![ast::Expr::var_ref("$cont")].into_iter().chain(
-        orig_func.params.iter().map(|param| ast::Expr::var_ref(&param.name)));
+        orig_func
+            .params
+            .iter()
+            .map(|param| ast::Expr::var_ref(&param.name)),
+    );
 
-    let mut push_calls = push_items.map(|arg| {
-        let cast = ast::Expr::Cast(
-            Box::new(arg),
-            ast::Ty::raw("$any"),
-            );
-        ast::Expr::FunCall(
-            Box::new(ast::Expr::var_ref("chiika_env_push")),
-            vec![ast::Expr::var_ref("$env"), cast],
-        )
-    }).collect::<Vec<_>>();
+    let mut push_calls = push_items
+        .map(|arg| {
+            let cast = ast::Expr::Cast(Box::new(arg), ast::Ty::raw("$any"));
+            ast::Expr::FunCall(
+                Box::new(ast::Expr::var_ref("chiika_env_push")),
+                vec![ast::Expr::var_ref("$env"), cast],
+            )
+        })
+        .collect::<Vec<_>>();
     push_calls.append(&mut stmts);
     push_calls
 }
 
-fn append_async_outro(orig_func: &ast::Function, mut stmts: Vec<ast::Expr>, result_ty: Ty) -> Vec<ast::Expr> {
+fn append_async_outro(
+    orig_func: &ast::Function,
+    mut stmts: Vec<ast::Expr>,
+    result_ty: Ty,
+) -> Vec<ast::Expr> {
     let result_value = stmts.pop().unwrap();
     let n_pop = orig_func.params.len() + 1; // +1 for $cont
     let env_pop = ast::Expr::FunCall(

@@ -8,12 +8,14 @@ CLANG = RUBY_PLATFORM =~ /linux/ ? "clang-16" : "clang"
 
 file RUNTIME_A => [*RUNTIME] do
   cd "chiika_runtime" do
+    sh "cargo fmt"
     sh "cargo build"
   end
 end
 
 file "#{NAME}.bc" => [*SRC_1, "#{NAME}.chiika1"] do
   cd "chiika-1" do
+    sh "cargo fmt"
     sh "cargo run -- ../#{NAME}.chiika1"
   end
 end
@@ -30,6 +32,7 @@ end
 
 file "#{NAME}.chiika1" => [*SRC_2, "#{NAME}.chiika2"] do
   cd "chiika-2" do
+    sh "cargo fmt"
     sh "cargo run -- ../#{NAME}.chiika2 > ../#{NAME}.chiika1"
   end
 end

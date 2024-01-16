@@ -1,11 +1,11 @@
 mod chiika_env;
 use crate::chiika_env::ChiikaEnv;
-mod sync_functions;
 mod async_functions;
+mod sync_functions;
 use std::ffi::c_void;
 use std::future::{poll_fn, Future};
-use std::task::Poll;
 use std::pin::Pin;
+use std::task::Poll;
 
 //async fn read(_: i64) -> i64 {
 //    match fs::read_to_string("count.txt").await {
@@ -39,17 +39,15 @@ pub extern "C" fn chiika_start_tokio(_: i64) -> i64 {
     let mut future: Option<_> = None;
     let poller = poll_fn(move |context| {
         if future.is_none() {
-            future = Some(unsafe {
-                chiika_main(&mut env, chiika_finish)
-            });
+            future = Some(unsafe { chiika_main(&mut env, chiika_finish) });
         }
         future.as_mut().unwrap().as_mut().poll(context)
     });
-     tokio::runtime::Builder::new_multi_thread()
-         .enable_all()
-         .build()
-         .unwrap()
-         .block_on(poller);
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(poller);
 
     // Q: Need this?
     // sleep(Duration::from_millis(50)).await;

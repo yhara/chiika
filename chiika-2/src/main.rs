@@ -2,7 +2,7 @@ mod ast;
 mod asyncness_check;
 mod compiler;
 mod parser;
-use anyhow::{bail, Result, Context};
+use anyhow::{bail, Context, Result};
 use ariadne::{Label, Report, ReportKind, Source};
 use chumsky::Parser;
 use parser::parser;
@@ -23,8 +23,7 @@ fn main() -> Result<()> {
     let Some(path) = args.get(1) else {
         bail!("usage: chiika-2 a.chiika2 > a.chiika1");
     };
-    let src = std::fs::read_to_string(path)
-        .context(format!("failed to read {}", path))?;
+    let src = std::fs::read_to_string(path).context(format!("failed to read {}", path))?;
     let ast = match parser().parse(src) {
         Ok(x) => x,
         Err(errs) => {
