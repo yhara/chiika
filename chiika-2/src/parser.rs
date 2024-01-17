@@ -54,14 +54,19 @@ fn atomic_parser(
 
 fn expr_parser() -> impl Parser<char, ast::Expr, Error = Simple<char>> {
     recursive(|expr| {
-        let bin_op = one_of("+-").map(|c| match c {
-            '+' => ast::BinOp::Add,
-            '-' => ast::BinOp::Sub,
-            _ => unreachable!(),
-        });
+        let bin_op = just("==")
+            .or(just("!="))
+            .or(just("<="))
+            .or(just("<"))
+            .or(just(">="))
+            .or(just(">"))
+            .or(just("+"))
+            .or(just("-"));
         let sum = atomic_parser(expr.clone())
             .then(bin_op.padded().then(atomic_parser(expr.clone())).repeated())
-            .foldl(|lhs, (op, rhs)| ast::Expr::OpCall(op, Box::new(lhs), Box::new(rhs)));
+            .foldl(|lhs, (op, rhs)| {
+                ast::Expr::OpCall(op.to_string(), Box::new(lhs), Box::new(rhs))
+            });
 
         let alloc = just("alloc")
             .padded()

@@ -10,25 +10,13 @@ func main() -> int {
 
 extern print(int n) -> int;
 extern sleep_sec($ENV $env, $FN(($ENV, int) -> $FUTURE) $cont, int n) -> $FUTURE;
-func foo($ENV $env, $FN(($ENV, int) -> $FUTURE) $cont, int a) -> $FUTURE {
-  chiika_env_push($env, ($CAST($cont as $any)));
-  chiika_env_push($env, ($CAST(a as $any)));
-  print(100);
-  sleep_sec($env, foo_1, 1);
+func foo(int a) -> int {
+  alloc i;
+  i = 0;
+  (a < 99);
 }
-func foo_1($ENV $env, int $async_result) -> $FUTURE {
-  print($async_result);
-  print(chiika_env_ref($env, 0));
-  ($CAST(chiika_env_pop($env, 2) as $FN(($ENV, int) -> $FUTURE)))($env, 300);
-}
-func chiika_main($ENV $env, $FN(($ENV, int) -> $FUTURE) $cont) -> $FUTURE {
-  chiika_env_push($env, ($CAST($cont as $any)));
-  alloc a;
-  a = (234 + 345);
-  foo($env, chiika_main_1, a);
-}
-func chiika_main_1($ENV $env, int $async_result) -> $FUTURE {
-  print($async_result);
-  ($CAST(chiika_env_pop($env, 1) as $FN(($ENV, int) -> $FUTURE)))($env, 0);
+func chiika_main() -> int {
+  print(foo(1234));
+  0;
 }
 

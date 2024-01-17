@@ -249,9 +249,23 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
             ast::Expr::OpCall(op, lhs, rhs) => {
                 let l = self.gen_expr(func, lvars, lhs)?.expect_int()?;
                 let r = self.gen_expr(func, lvars, rhs)?.expect_int()?;
-                LlvmValue::Int(match op {
-                    ast::BinOp::Add => self.builder.build_int_add(l, r, "result"),
-                    ast::BinOp::Sub => self.builder.build_int_sub(l, r, "result"),
+                LlvmValue::Int(match &op[..] {
+                    "+" => self.builder.build_int_add(l, r, "result"),
+                    "-" => self.builder.build_int_sub(l, r, "result"),
+                    _ => {
+                        let pred = match &op[..] {
+                            "==" => inkwell::IntPredicate::EQ,
+                            "!=" => inkwell::IntPredicate::NE,
+                            "<" => inkwell::IntPredicate::SLT,
+                            "<=" => inkwell::IntPredicate::SLE,
+                            ">" => inkwell::IntPredicate::SGT,
+                            ">=" => inkwell::IntPredicate::SGE,
+                            _ => return Err(anyhow!("unknown binop `{}'", op)),
+                        };
+                        let i1 = self.builder.build_int_compare(pred, l, r, "result");
+                        self.builder
+                            .build_int_cast(i1, self.context.i64_type(), "cast")
+                    }
                 })
             }
             ast::Expr::FunCall(func_expr, arg_exprs) => {

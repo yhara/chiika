@@ -1,14 +1,8 @@
 #[derive(PartialEq, Debug, Clone)]
-pub enum BinOp {
-    Add,
-    Sub,
-}
-
-#[derive(PartialEq, Debug, Clone)]
 pub enum Expr {
     Number(i64),
     VarRef(String),
-    OpCall(BinOp, Box<Expr>, Box<Expr>),
+    OpCall(String, Box<Expr>, Box<Expr>),
     FunCall(Box<Expr>, Vec<Expr>),
     Cast(Box<Expr>, Ty),
     Alloc(String),
