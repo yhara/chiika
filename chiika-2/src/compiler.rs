@@ -125,6 +125,11 @@ impl Compiler {
         let new_e = match e {
             ast::Expr::Alloc(_) => e,
             ast::Expr::Number(_) => e,
+            ast::Expr::OpCall(op, lhs, rhs) => {
+                let l = self.compile_expr(orig_func, *lhs)?;
+                let r = self.compile_expr(orig_func, *rhs)?;
+                ast::Expr::OpCall(op, Box::new(l), Box::new(r))
+            }
             ast::Expr::VarRef(ref name) => {
                 if self.sigs.contains_key(name) {
                     e
