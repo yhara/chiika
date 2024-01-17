@@ -2,15 +2,12 @@ extern print(int n) -> int;
 extern_async sleep_sec(int n) -> int;
 
 fun foo(int a) -> int {
-  print(100);
-  print(sleep_sec(1));
-  print(a);
-  300
+  alloc i;
+  i = 0;
+  a < 99
 }
 
 fun chiika_main() -> int {
-  alloc a;
-  a = 234 + 345;
-  print(foo(a));
+  print(foo(1234));
   0
 }

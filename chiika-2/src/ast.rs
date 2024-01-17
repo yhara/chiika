@@ -78,17 +78,11 @@ pub struct FunTy {
 pub enum Expr {
     Number(i64),
     VarRef(String),
-    OpCall(BinOp, Box<Expr>, Box<Expr>),
+    OpCall(String, Box<Expr>, Box<Expr>),
     FunCall(Box<Expr>, Vec<Expr>),
     Cast(Box<Expr>, Ty),
     Alloc(String),
     Assign(String, Box<Expr>),
-}
-
-#[derive(PartialEq, Debug, Clone)]
-pub enum BinOp {
-    Add,
-    Sub,
 }
 
 pub fn to_source(ast: Vec<Declaration>) -> String {
@@ -189,15 +183,6 @@ impl std::fmt::Display for Expr {
             Expr::Cast(expr, ty) => write!(f, "($CAST({} as {}))", expr, ty),
             Expr::Alloc(name) => write!(f, "alloc {}", name),
             Expr::Assign(name, expr) => write!(f, "{} = {}", name, expr),
-        }
-    }
-}
-
-impl std::fmt::Display for BinOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            BinOp::Add => write!(f, "{}", '+'),
-            BinOp::Sub => write!(f, "{}", '-'),
         }
     }
 }
