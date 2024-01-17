@@ -54,14 +54,14 @@ fn atomic_parser(
 
 fn expr_parser() -> impl Parser<char, ast::Expr, Error = Simple<char>> {
     recursive(|expr| {
-        //let bin_op = one_of("+-").map(|c| match c {
-        //    '+' => ast::BinOp::Add,
-        //    '-' => ast::BinOp::Sub,
-        //    _ => unreachable!(),
-        //});
-        //let sum = atomic_parser(expr.clone())
-        //    .then(bin_op.padded().then(atomic_parser(expr.clone())).repeated())
-        //    .foldl(|lhs, (op, rhs)| ast::Expr::OpCall(op, Box::new(lhs), Box::new(rhs)));
+        let bin_op = one_of("+-").map(|c| match c {
+            '+' => ast::BinOp::Add,
+            '-' => ast::BinOp::Sub,
+            _ => unreachable!(),
+        });
+        let sum = atomic_parser(expr.clone())
+            .then(bin_op.padded().then(atomic_parser(expr.clone())).repeated())
+            .foldl(|lhs, (op, rhs)| ast::Expr::OpCall(op, Box::new(lhs), Box::new(rhs)));
 
         let alloc = just("alloc")
             .padded()
@@ -74,7 +74,7 @@ fn expr_parser() -> impl Parser<char, ast::Expr, Error = Simple<char>> {
             .then(expr.clone())
             .map(|(name, rhs)| ast::Expr::Assign(name, Box::new(rhs)));
 
-        alloc.or(assign).or(atomic_parser(expr))
+        alloc.or(assign).or(sum).or(atomic_parser(expr))
     })
 }
 

@@ -26,7 +26,7 @@ define ptr @chiika_main(ptr %0, ptr %1) {
 start:
   %result = call i64 @chiika_env_push(ptr %0, i64 ptrtoint (ptr %1 to i64))
   %a = alloca i64, align 8
-  store i64 234, ptr %a, align 4
+  store i64 579, ptr %a, align 4
   %n = load i64, ptr %a, align 4
   %result1 = call ptr @foo(ptr %0, ptr @chiika_main_1, i64 %n)
   ret ptr %result1

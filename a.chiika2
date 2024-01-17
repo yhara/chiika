@@ -10,7 +10,7 @@ fun foo(int a) -> int {
 
 fun chiika_main() -> int {
   alloc a;
-  a = 234;
+  a = 234 + 345;
   print(foo(a));
   0
 }
