@@ -41,4 +41,5 @@ task "a" => "#{NAME}.out" do
   sh "./a.out"
 end
 
+task "2" => "#{NAME}.chiika1"
 task default: "a"

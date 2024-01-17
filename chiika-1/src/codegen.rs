@@ -203,8 +203,9 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
     }
 
     fn gen_stmts(&self, func: &ast::Function, stmts: &[ast::Expr]) -> Result<()> {
+        let mut lvars = HashMap::new();
         for i in 0..stmts.len() {
-            let v = self.gen_expr(func, &stmts[i])?;
+            let v = self.gen_expr(func, &mut lvars, &stmts[i])?;
             if i == stmts.len() - 1 {
                 self.builder.build_return(Some(&v.into_arg_value()));
             }
@@ -212,7 +213,12 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
         Ok(())
     }
 
-    fn gen_expr(&self, func: &ast::Function, expr: &ast::Expr) -> Result<LlvmValue<'ictx>> {
+    fn gen_expr(
+        &self,
+        func: &ast::Function,
+        lvars: &mut HashMap<String, inkwell::values::PointerValue<'ictx>>,
+        expr: &ast::Expr,
+    ) -> Result<LlvmValue<'ictx>> {
         log(format!("- {:?}", expr));
         let v = match expr {
             ast::Expr::Number(n) => self.llvm_int(*n as u64),
@@ -222,6 +228,12 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
                     let f = self.module.get_function(&func.name).unwrap();
                     let v = f.get_nth_param(idx as u32).unwrap();
                     self.cast(v, &param.ty)?
+                } else if let Some(ptr) = lvars.get(s) {
+                    let n = self
+                        .builder
+                        .build_load(self.context.i64_type(), ptr.clone(), "n")
+                        .into_int_value();
+                    LlvmValue::Int(n)
                 } else {
                     let f = self
                         .module
@@ -235,8 +247,8 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
                 }
             }
             ast::Expr::OpCall(op, lhs, rhs) => {
-                let l = self.gen_expr(func, lhs)?.expect_int()?;
-                let r = self.gen_expr(func, rhs)?.expect_int()?;
+                let l = self.gen_expr(func, lvars, lhs)?.expect_int()?;
+                let r = self.gen_expr(func, lvars, rhs)?.expect_int()?;
                 LlvmValue::Int(match op {
                     ast::BinOp::Add => self.builder.build_int_add(l, r, "result"),
                     ast::BinOp::Sub => self.builder.build_int_sub(l, r, "result"),
@@ -245,12 +257,12 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
             ast::Expr::FunCall(func_expr, arg_exprs) => {
                 let args = arg_exprs
                     .iter()
-                    .map(|expr| self.gen_expr(func, expr))
+                    .map(|expr| self.gen_expr(func, lvars, expr))
                     .collect::<Result<Vec<_>>>()?
                     .into_iter()
                     .map(|arg| arg.into_arg_value().into())
                     .collect::<Vec<_>>();
-                let (x, fun_ty) = match self.gen_expr(func, func_expr)? {
+                let (x, fun_ty) = match self.gen_expr(func, lvars, func_expr)? {
                     LlvmValue::Func(f, fun_ty) => (
                         self.builder
                             .build_direct_call(f, &args, "result")
@@ -273,8 +285,21 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
                 self.cast(x.as_basic_value_enum(), &fun_ty.ret_ty)?
             }
             ast::Expr::Cast(expr, ty) => {
-                let v = self.gen_expr(func, expr)?;
+                let v = self.gen_expr(func, lvars, expr)?;
                 self.recast(v, ty)?
+            }
+            ast::Expr::Alloc(name) => {
+                let ptr = self.builder.build_alloca(self.context.i64_type(), name);
+                lvars.insert(name.clone(), ptr);
+                self.llvm_int(0)
+            }
+            ast::Expr::Assign(name, rhs) => {
+                let v = self.gen_expr(func, lvars, rhs)?;
+                let ptr = lvars
+                    .get(name)
+                    .expect(&format!("unknown variable `{}'", name));
+                self.builder.build_store(ptr.clone(), v.into_arg_value());
+                self.llvm_int(0)
             }
         };
         Ok(v)

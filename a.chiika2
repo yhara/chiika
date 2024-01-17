@@ -1,5 +1,6 @@
 extern print(int n) -> int;
 extern_async sleep_sec(int n) -> int;
+
 fun foo(int a) -> int {
   print(100);
   print(sleep_sec(1));
@@ -8,6 +9,8 @@ fun foo(int a) -> int {
 }
 
 fun chiika_main() -> int {
-  print(foo(123));
+  alloc a;
+  a = 234;
+  print(foo(a));
   0
 }

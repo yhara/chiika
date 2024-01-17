@@ -81,6 +81,8 @@ pub enum Expr {
     //OpCall(BinOp, Box<Expr>, Box<Expr>),
     FunCall(Box<Expr>, Vec<Expr>),
     Cast(Box<Expr>, Ty),
+    Alloc(String),
+    Assign(String, Box<Expr>),
 }
 
 pub fn to_source(ast: Vec<Declaration>) -> String {
@@ -178,6 +180,8 @@ impl std::fmt::Display for Expr {
                 write!(f, "{}({})", fexpr, args)
             }
             Expr::Cast(expr, ty) => write!(f, "($CAST({} as {}))", expr, ty),
+            Expr::Alloc(name) => write!(f, "alloc {}", name),
+            Expr::Assign(name, expr) => write!(f, "{} = {}", name, expr),
         }
     }
 }
