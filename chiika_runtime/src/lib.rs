@@ -25,7 +25,7 @@ type ChiikaCont = extern "C" fn(env: *mut ChiikaEnv, value: *mut c_void) -> Void
 
 #[allow(improper_ctypes)]
 extern "C" {
-    fn chiika_main(env: *mut ChiikaEnv, cont: ChiikaCont) -> VoidFuture;
+    fn chiika_start_user(env: *mut ChiikaEnv, cont: ChiikaCont) -> VoidFuture;
 }
 
 #[allow(improper_ctypes_definitions)]
@@ -39,7 +39,7 @@ pub extern "C" fn chiika_start_tokio(_: i64) -> i64 {
     let mut future: Option<_> = None;
     let poller = poll_fn(move |context| {
         if future.is_none() {
-            future = Some(unsafe { chiika_main(&mut env, chiika_finish) });
+            future = Some(unsafe { chiika_start_user(&mut env, chiika_finish) });
         }
         future.as_mut().unwrap().as_mut().poll(context)
     });
