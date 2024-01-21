@@ -3,6 +3,9 @@ extern chiika_env_push($ENV $env, $any obj) -> int;
 extern chiika_env_pop($ENV $env, int n) -> $any;
 extern chiika_env_ref($ENV $env, int n) -> int;
 extern chiika_start_tokio(int n) -> int;
+func chiika_start_user($ENV $env, $FN(($ENV, $any) -> $FUTURE) $cont) -> $FUTURE {
+    $cont($env, chiika_main())
+}
 func main() -> int {
   chiika_start_tokio(0);
   0
@@ -10,13 +13,8 @@ func main() -> int {
 
 extern print(int n) -> int;
 extern sleep_sec($ENV $env, $FN(($ENV, int) -> $FUTURE) $cont, int n) -> $FUTURE;
-func foo(int a) -> int {
-  alloc i;
-  i = 0;
-  (a < 99);
-}
 func chiika_main() -> int {
-  print(foo(1234));
+  print(1);
   0;
 }
 

@@ -63,6 +63,7 @@ pub fn run(ast: Vec<ast::Declaration>) -> Result<()> {
     code_gen.gen_declares(&externs);
     code_gen.gen_program()?;
     log("Finished compilation.");
+    code_gen.module.verify().unwrap();
     code_gen
         .module
         .print_to_file("../a.ll")

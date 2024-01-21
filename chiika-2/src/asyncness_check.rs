@@ -44,6 +44,10 @@ fn gather_sig(
     func: &ast::Function,
     sigs: &HashMap<String, FunTy>,
 ) -> Result<Either<FuncName, FunTy>> {
+    //    if func.name == "chiika_main" {
+    //        // Entry point function must be compiled as async
+    //        return Ok(Either::Right(func.fun_ty(true)));
+    //    }
     let mut is_async = false;
     for stmt in &func.body_stmts {
         match check_async(&func.name, &stmt, sigs)? {

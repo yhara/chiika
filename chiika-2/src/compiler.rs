@@ -26,7 +26,8 @@ impl Chapter {
     }
 }
 
-pub fn compile(ast: Vec<ast::Declaration>) -> Result<Vec<ast::Declaration>> {
+/// Returns new_decls and main_is_async
+pub fn compile(ast: Vec<ast::Declaration>) -> Result<(Vec<ast::Declaration>, bool)> {
     let mut c = Compiler {
         sigs: gather_sigs(&ast)?,
         chapters: Default::default(),
@@ -47,7 +48,12 @@ pub fn compile(ast: Vec<ast::Declaration>) -> Result<Vec<ast::Declaration>> {
             }
         }
     }
-    Ok(new_decls)
+    let main_is_async = c
+        .sigs
+        .get("chiika_main")
+        .expect("must define `chiika_main'")
+        .is_async;
+    Ok((new_decls, main_is_async))
 }
 
 impl Compiler {

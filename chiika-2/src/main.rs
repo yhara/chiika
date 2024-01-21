@@ -35,18 +35,27 @@ fn main() -> Result<()> {
             bail!(s);
         }
     };
-    let compiled = compiler::compile(ast)?;
+    let (compiled, main_is_async) = compiler::compile(ast)?;
+    let call_chiika_main = if main_is_async {
+        "chiika_main($env, $cont)"
+    } else {
+        "$cont($env, chiika_main())"
+    };
     println!(
         "
 extern chiika_env_push($ENV $env, $any obj) -> int;
 extern chiika_env_pop($ENV $env, int n) -> $any;
 extern chiika_env_ref($ENV $env, int n) -> int;
 extern chiika_start_tokio(int n) -> int;
+func chiika_start_user($ENV $env, $FN(($ENV, $any) -> $FUTURE) $cont) -> $FUTURE {{
+    {}
+}}
 func main() -> int {{
   chiika_start_tokio(0);
   0
 }}
-"
+",
+        call_chiika_main
     );
     println!("{}", ast::to_source(compiled));
     Ok(())
