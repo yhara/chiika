@@ -1,7 +1,17 @@
 extern print(int n) -> int;
 extern_async sleep_sec(int n) -> int;
 
+fun foo(int a) -> int {
+  alloc i;
+  i = 0;
+  a
+}
+
 fun chiika_main() -> int {
-  print(1);
+  if (1 < 2) {
+    print(100);
+  } else {
+    print(200);
+  }
   0
 }

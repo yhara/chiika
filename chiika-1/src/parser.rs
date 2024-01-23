@@ -98,10 +98,21 @@ pub fn expr_parser() -> impl Parser<char, ast::Expr, Error = Simple<char>> {
 }
 
 pub fn stmts_parser() -> impl Parser<char, Vec<ast::Expr>, Error = Simple<char>> {
-    expr_parser()
+    let jump = just("jump_if")
         .padded()
-        .separated_by(just(';'))
-        .allow_trailing()
+        .ignore_then(expr_parser().padded().delimited_by(just('('), just(')')))
+        .then(ident_parser().padded())
+        .then_ignore(just("else"))
+        .then(ident_parser().padded())
+        .then_ignore(just(';'))
+        .map(|((cond, then), els)| ast::Expr::JumpIf(Box::new(cond), then, els));
+
+    let label = ident_parser().then_ignore(just(':')).map(ast::Expr::Label);
+
+    (jump.padded())
+        .or(label.padded())
+        .or(expr_parser().padded().then_ignore(just(';')).padded())
+        .repeated()
 }
 
 pub fn param_parser() -> impl Parser<char, ast::Param, Error = Simple<char>> {

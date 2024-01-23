@@ -13,8 +13,17 @@ pub struct CodeGen<'run, 'ictx: 'run> {
     builder: &'run inkwell::builder::Builder<'ictx>,
 }
 
+/// Per-function context
+pub struct Ctx<'run, 'ictx: 'run> {
+    func: &'run ast::Function,
+    llvm_func: inkwell::values::FunctionValue<'ictx>,
+    lvars: HashMap<String, inkwell::values::PointerValue<'ictx>>,
+    blocks: HashMap<String, inkwell::basic_block::BasicBlock<'ictx>>,
+}
+
 #[derive(Debug, Clone)]
 enum LlvmValue<'ictx> {
+    Bool(inkwell::values::IntValue<'ictx>),
     Int(inkwell::values::IntValue<'ictx>),
     Any(inkwell::values::IntValue<'ictx>),
     // Values whose internal is unknown to Chiika. Handled as `i8*`
@@ -26,6 +35,7 @@ enum LlvmValue<'ictx> {
 impl<'ictx> LlvmValue<'ictx> {
     fn into_arg_value(self) -> inkwell::values::BasicValueEnum<'ictx> {
         match self {
+            LlvmValue::Bool(_) => panic!("bools cannot be passed as an arg"),
             LlvmValue::Int(x) => x.into(),
             LlvmValue::Any(x) => x.into(),
             LlvmValue::Opaque(x) => x.into(),
@@ -36,6 +46,7 @@ impl<'ictx> LlvmValue<'ictx> {
 
     fn into_integer(self, t: inkwell::types::IntType<'ictx>) -> inkwell::values::IntValue<'ictx> {
         let ptr = match self {
+            LlvmValue::Bool(_) => panic!("bools cannot be passed as an arg"),
             LlvmValue::Int(x) | LlvmValue::Any(x) => return x,
             LlvmValue::Opaque(x) => x,
             LlvmValue::Func(x, _) => x.as_global_value().as_pointer_value(),
@@ -199,14 +210,20 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
         let f = self.module.get_function(&func.name).unwrap();
         let block = self.context.append_basic_block(f, "start");
         self.builder.position_at_end(block);
-        self.gen_stmts(func, &func.body_stmts)?;
+
+        let mut ctx = Ctx {
+            func,
+            llvm_func: f,
+            lvars: Default::default(),
+            blocks: Default::default(),
+        };
+        self.gen_stmts(&mut ctx, &func.body_stmts)?;
         Ok(())
     }
 
-    fn gen_stmts(&self, func: &ast::Function, stmts: &[ast::Expr]) -> Result<()> {
-        let mut lvars = HashMap::new();
+    fn gen_stmts(&self, ctx: &mut Ctx<'run, 'ictx>, stmts: &[ast::Expr]) -> Result<()> {
         for i in 0..stmts.len() {
-            let v = self.gen_expr(func, &mut lvars, &stmts[i])?;
+            let v = self.gen_expr(ctx, &stmts[i])?;
             if i == stmts.len() - 1 {
                 self.builder.build_return(Some(&v.into_arg_value()));
             }
@@ -214,22 +231,17 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
         Ok(())
     }
 
-    fn gen_expr(
-        &self,
-        func: &ast::Function,
-        lvars: &mut HashMap<String, inkwell::values::PointerValue<'ictx>>,
-        expr: &ast::Expr,
-    ) -> Result<LlvmValue<'ictx>> {
+    fn gen_expr(&self, ctx: &mut Ctx<'run, 'ictx>, expr: &ast::Expr) -> Result<LlvmValue<'ictx>> {
         log(format!("- {:?}", expr));
+        let void = self.llvm_int(0);
         let v = match expr {
             ast::Expr::Number(n) => self.llvm_int(*n as u64),
             ast::Expr::VarRef(s) => {
-                if let Some(idx) = func.params.iter().position(|param| param.name == *s) {
-                    let param = &func.params[idx];
-                    let f = self.module.get_function(&func.name).unwrap();
-                    let v = f.get_nth_param(idx as u32).unwrap();
+                if let Some(idx) = ctx.func.params.iter().position(|param| param.name == *s) {
+                    let param = &ctx.func.params[idx];
+                    let v = ctx.llvm_func.get_nth_param(idx as u32).unwrap();
                     self.cast(v, &param.ty)?
-                } else if let Some(ptr) = lvars.get(s) {
+                } else if let Some(ptr) = ctx.lvars.get(s) {
                     let n = self
                         .builder
                         .build_load(self.context.i64_type(), ptr.clone(), "n")
@@ -248,8 +260,8 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
                 }
             }
             ast::Expr::OpCall(op, lhs, rhs) => {
-                let l = self.gen_expr(func, lvars, lhs)?.expect_int()?;
-                let r = self.gen_expr(func, lvars, rhs)?.expect_int()?;
+                let l = self.gen_expr(ctx, lhs)?.expect_int()?;
+                let r = self.gen_expr(ctx, rhs)?.expect_int()?;
                 LlvmValue::Int(match &op[..] {
                     "+" => self.builder.build_int_add(l, r, "result"),
                     "-" => self.builder.build_int_sub(l, r, "result"),
@@ -264,20 +276,19 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
                             _ => return Err(anyhow!("unknown binop `{}'", op)),
                         };
                         let i1 = self.builder.build_int_compare(pred, l, r, "result");
-                        self.builder
-                            .build_int_cast(i1, self.context.i64_type(), "cast")
+                        return Ok(LlvmValue::Bool(i1));
                     }
                 })
             }
             ast::Expr::FunCall(func_expr, arg_exprs) => {
                 let args = arg_exprs
                     .iter()
-                    .map(|expr| self.gen_expr(func, lvars, expr))
+                    .map(|expr| self.gen_expr(ctx, expr))
                     .collect::<Result<Vec<_>>>()?
                     .into_iter()
                     .map(|arg| arg.into_arg_value().into())
                     .collect::<Vec<_>>();
-                let (x, fun_ty) = match self.gen_expr(func, lvars, func_expr)? {
+                let (x, fun_ty) = match self.gen_expr(ctx, func_expr)? {
                     LlvmValue::Func(f, fun_ty) => (
                         self.builder
                             .build_direct_call(f, &args, "result")
@@ -299,25 +310,59 @@ impl<'run, 'ictx: 'run> CodeGen<'run, 'ictx> {
                 };
                 self.cast(x.as_basic_value_enum(), &fun_ty.ret_ty)?
             }
+            ast::Expr::JumpIf(cond, label_then, label_else) => {
+                let v = self.gen_expr(ctx, expr)?;
+                let LlvmValue::Bool(i1) = v else {
+                    return Err(anyhow!("not a bool: {:?}", cond));
+                };
+                self.builder.build_conditional_branch(
+                    i1,
+                    self.get_or_create_block(ctx, label_then),
+                    self.get_or_create_block(ctx, label_else),
+                );
+                void
+            }
+            ast::Expr::Label(name) => {
+                let block = self.get_or_create_block(ctx, name);
+                self.builder.position_at_end(block.clone());
+                void
+            }
             ast::Expr::Cast(expr, ty) => {
-                let v = self.gen_expr(func, lvars, expr)?;
+                let v = self.gen_expr(ctx, expr)?;
                 self.recast(v, ty)?
             }
             ast::Expr::Alloc(name) => {
                 let ptr = self.builder.build_alloca(self.context.i64_type(), name);
-                lvars.insert(name.clone(), ptr);
-                self.llvm_int(0)
+                ctx.lvars.insert(name.clone(), ptr);
+                void
             }
             ast::Expr::Assign(name, rhs) => {
-                let v = self.gen_expr(func, lvars, rhs)?;
-                let ptr = lvars
+                let v = self.gen_expr(ctx, rhs)?;
+                let ptr = ctx
+                    .lvars
                     .get(name)
                     .expect(&format!("unknown variable `{}'", name));
                 self.builder.build_store(ptr.clone(), v.into_arg_value());
-                self.llvm_int(0)
+                void
             }
         };
         Ok(v)
+    }
+
+    fn get_or_create_block(
+        &self,
+        ctx: &mut Ctx<'run, 'ictx>,
+        name: &str,
+    ) -> inkwell::basic_block::BasicBlock<'ictx> {
+        if !ctx.blocks.contains_key(name) {
+            self.create_block(ctx, name);
+        }
+        ctx.blocks.get(name).unwrap().clone()
+    }
+
+    fn create_block(&self, ctx: &mut Ctx<'run, 'ictx>, name: &str) {
+        let block = self.context.append_basic_block(ctx.llvm_func.clone(), name);
+        ctx.blocks.insert(name.to_string(), block);
     }
 }
 

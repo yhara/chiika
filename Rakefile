@@ -41,5 +41,12 @@ task "a" => "#{NAME}.out" do
   sh "./a.out"
 end
 
+task "1" do
+  cd "chiika-1" do
+    sh "cargo fmt"
+    sh "cargo run -- ../#{NAME}.chiika1"
+  end
+end
+
 task "2" => "#{NAME}.chiika1"
 task default: "a"

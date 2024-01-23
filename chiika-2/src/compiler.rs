@@ -185,6 +185,8 @@ impl Compiler {
                     ast::Expr::FunCall(Box::new(ast::Expr::VarRef(callee_name)), new_args)
                 }
             }
+            ast::Expr::If(cond, then_exprs, else_exprs) => {
+            }
             ast::Expr::Cast(_, _) => panic!("chiika-2 does not have cast operation"),
             ast::Expr::Assign(name, rhs) => {
                 ast::Expr::Assign(name, Box::new(self.compile_expr(orig_func, *rhs)?))

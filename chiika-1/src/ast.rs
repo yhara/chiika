@@ -4,6 +4,8 @@ pub enum Expr {
     VarRef(String),
     OpCall(String, Box<Expr>, Box<Expr>),
     FunCall(Box<Expr>, Vec<Expr>),
+    JumpIf(Box<Expr>, String, String),
+    Label(String),
     Cast(Box<Expr>, Ty),
     Alloc(String),
     Assign(String, Box<Expr>),

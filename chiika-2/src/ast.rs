@@ -80,7 +80,10 @@ pub enum Expr {
     VarRef(String),
     OpCall(String, Box<Expr>, Box<Expr>),
     FunCall(Box<Expr>, Vec<Expr>),
-    Cast(Box<Expr>, Ty),
+    If(Box<Expr>, Vec<Expr>, Vec<Expr>),
+    JumpIf(Box<Expr>, String, String), //chiika-1 only
+    Label(String), //chiika-1 only
+    Cast(Box<Expr>, Ty), //chiika-1 only
     Alloc(String),
     Assign(String, Box<Expr>),
 }
@@ -180,6 +183,7 @@ impl std::fmt::Display for Expr {
                     .join(", ");
                 write!(f, "{}({})", fexpr, args)
             }
+            Expr::If(_, _, _) => panic!("no `if` in chiika-1"),
             Expr::Cast(expr, ty) => write!(f, "($CAST({} as {}))", expr, ty),
             Expr::Alloc(name) => write!(f, "alloc {}", name),
             Expr::Assign(name, expr) => write!(f, "{} = {}", name, expr),
